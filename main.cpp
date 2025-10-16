@@ -26,9 +26,6 @@
 
 namespace fs = std::filesystem;
 
-// these will not work when you copy the code, but they are not currently used in the autonomous code
-ASSET(curve_txt);
-
 // red team vs blue team
 enum Color 
 {
@@ -49,59 +46,44 @@ enum IntakeDirection
 //ex: 1 = A, 2 = B, 3 = C, 4 = D
 
 // drive motors
-pros::Motor front_left_motor(-19, pros::MotorGears::blue); // front left motor on port 9
-pros::Motor middle_left_motor(9, pros::MotorGears::blue); // middle left motor on port 20
-pros::Motor front_motor(-10, pros::MotorGears::blue); // back left motor on port 10
+pros::Motor front_left_motor(-11, pros::MotorGears::blue); // front left motor on port 9
+pros::Motor middle_left_motor(12, pros::MotorGears::blue); // middle left motor on port 20
+pros::Motor front_motor(-13, pros::MotorGears::blue); // back left motor on port 10
 pros::Motor front_right_motor(2, pros::MotorGears::blue); // front right motor on port 2
 pros::Motor middle_right_motor(-3, pros::MotorGears::blue); // middle right motor on port 11
 pros::Motor back_motor(5, pros::MotorGears::blue); // back right motor on port 5
 
 //intake_motors
-pros::Motor intake_motor_left(20, pros::MotorGears::blue); // intake motor on port 19
-pros::Motor intake_motor_right(-11, pros::MotorGears::blue); // lift motor on port 12
+pros::Motor intake_bottom(8, pros::MotorGears::blue); // intake motor on port 19
+pros::Motor intake_top(10, pros::MotorGears::blue); // lift motor on port 12
+pros::Motor intake_index(9, pros::MotorGears::blue); // lift motor on port 12
 
 // condensed motors into motor groups
-pros::MotorGroup left_motor_group({-2, 3, -4}, pros::MotorGears::blue); //the right side of the drivetrain
-pros::MotorGroup right_motor_group({6, -7, 8}, pros::MotorGears::blue); //the left side of the drivetrain
-pros::MotorGroup intake_motor_group({9}, pros::MotorGears::blue); 
-
-// pneumatics 
-pros::ADIDigitalOut mogo (5); // mogo on port 5 (letter E)
-pros::ADIDigitalOut pto (6); // pto on port 7 (letter G)
-pros::ADIDigitalOut hook (4); // hook on port 3 (letter C)
+pros::MotorGroup left_motor_group({-11, 12, -13}, pros::MotorGears::blue); //the right side of the drivetrain
+pros::MotorGroup right_motor_group({14, -15, 16}, pros::MotorGears::blue); //the left side of the drivetrain
 
 lemlib::Drivetrain drivetrain_6m(&left_motor_group, //motors that are on the left channel
-                              &right_motor_group, //motors that are on the right channel
+                              &right_motor_group, //motors that a	re on the right channel
                               11.25, // track width
                               lemlib::Omniwheel::NEW_275, //the specific vex wheels used
                               600, // the rpm of the driven axels
-                              2 //horizontal drift
+                              8 //horizontal drift
 ); 
 
 // create an imu on port 12
-pros::Imu imu(10);
+pros::Imu imu(7);
 
-pros::Distance distance_front(16);
-pros::Distance distance_back(14);
-pros::Distance distance_left(17);
-pros::Distance distance_right(15);
+pros::ADIDigitalOut ears(3);
+pros::ADIDigitalOut scraper(2);
+pros::ADIDigitalOut hood(1);
 
-//distance sensor initialization
-pros::Distance distance_sort(13);
-
-//limit switches
-//pros::ADIDigitalIn mogo_switch(2);
-pros::ADIDigitalIn color_switch(8);
-
-//pros::ADIDigitalIn left_switch(1);
-
-// arm tracking encoder
-pros::Rotation arm_encoder(19);
 // left tracking wheel encoder
-pros::Rotation vertical_encoder(-1);
+pros::Rotation vertical_encoder(-17);
+
+pros::Distance distance_front(5);
 
 // left tracking wheel (&what sensor it is tracking, &what type of omniwheel, offset, gear ratio)
-lemlib::TrackingWheel vertical_tracking_wheel(&vertical_encoder, lemlib::Omniwheel::NEW_2, +0 /*-1*/, 1);
+lemlib::TrackingWheel vertical_tracking_wheel(&vertical_encoder, 2.75, +0 /*-1*/, 1);
 // right tracking wheel(&what sensor it is tracking, &what type of omniwheel, offset, gear ratio
 
 //auton_selector
@@ -121,22 +103,22 @@ lemlib::OdomSensors sensors(&vertical_tracking_wheel, // vertical tracking wheel
 
 
 // lateral PID controller
-lemlib::ControllerSettings lateral_controller_large(25, // proportional gain (kP)10
-                                              0.13, // integral gain (kI)0.1
-                                              225, // derivative gain (kD)53
-                                              0.5, // anti windup
+lemlib::ControllerSettings lateral_controller(19, // proportional gain (kP)10
+                                              0.15, // integral gain (kI)0.1
+                                              150, // derivative gain (kD)53
+                                              2, // anti windup
                                               1, // small error range, in inches
                                               100, // small error range timeout, in milliseconds
                                               3, // large error range, in inches
                                               500, // large error range timeout, in milliseconds
-                                              90 // maximum acceleration (slew)
+                                              90//250 // maximum acceleration (slew)
 );
 
 // angular PID controller
-lemlib::ControllerSettings angular_controller_large(2.8, // proportional gain (kP)
-                                              0.2, // intgral gain (kI)
-                                              23, //derivative gain (kD)
-                                              6, // anti windup
+lemlib::ControllerSettings angular_controller(3.2, // proportional gain (kP)
+                                              0.25, // integral gain (kI)
+                                              28,// derivative gain (kD)
+                                              4, // anti windup
                                               1, // small error range, in degrees
                                               100, // small error range timeout, in milliseconds
                                               3, // large error range, in degrees
@@ -147,42 +129,34 @@ lemlib::ControllerSettings angular_controller_large(2.8, // proportional gain (k
 
 // input curve for throttle input during driver control
 lemlib::ExpoDriveCurve throttle_curve(3, // joystick deadband out of 127
-                                     10, // minimum output where drivetrain will move out of 127
+                                     3, // minimum output where drivetrain will move out of 127
                                      1.019 // expo curve gain
 );
 
 // input curve for steer input during driver control
 lemlib::ExpoDriveCurve steer_curve	(3, // joystick deadband out of 127
-                                  10, // minimum output where drivetrain will move out of 127
-                                  1.05 //1.03 expo curve gain
+                                  3, // minimum output where drivetrain will move out of 127
+                                  1.019 //1.03 expo curve gain
 );
 
 // create the chassis
 lemlib::Chassis chassis(drivetrain_6m, // drivetrain settings
-                        lateral_controller_large, // lateral PID settings
-                        angular_controller_large, // angular PID settings
+                        lateral_controller, // lateral PID settings
+                        angular_controller, // angular PID settings
                         sensors, // odometry sensors
                         &throttle_curve, // forward/backward driver movement
                         &steer_curve // left/right driver movement
 						);
 
 					
-/*
-lemlib::Chassis chassis_small(drivetrain_6m, // drivetrain settings
-                        lateral_controller_small, // lateral PID settings
-                        angular_controller_small, // angular PID settings
-                        sensors, // odometry sensors
-                        &throttle_curve, // forward/backward driver movement
-                        &steer_curve // left/right driver movement
-						);
-*/
+
 
 pros::Controller controller(pros::E_CONTROLLER_MASTER); // the controller that will be used for driving
 
 //global variables
 //TODO is auto_started still needed?
 bool g_auton_started = false; // determines whether the autonamous code has been started
-bool g_op_control_started = false; // determin es whether the driver code has been started
+bool g_op_control_started = false; // determines whether the driver code has been started
 
 // get and set in autonomous()
 int g_current_auton_select = 2; // determines which auton path is going to be run
@@ -190,49 +164,20 @@ int g_current_auton_select = 2; // determines which auton path is going to be ru
 // set in color_select(), get in color_sorting() and autonomous()
 int g_team_color = BLUE; //red = 1, blue = -1
 
-// set in both auto_clamp and op_control
-// TODO: Do we need to coordinate bteween these 2 functions?
-bool g_mogo_setting = false;
-
-
-//defines the pto value
-//set in auton and driver
-bool g_pto_setting = false;
-
-bool g_high_stake = false;
-
-//defines the hook value
-//set in auton and driver
-bool g_hook_setting = false;
-
 // set in color_sorting() and get in autonomous()
 float g_intake_direction = 1;
 
-// get/set in opcontrol() 
-bool g_claw_mode = false;
-//bool seen_blue = false;
+//pneumatics toggles
+float g_ears_state = false;
+float g_scraper_state = false;
+float g_hood_state = false;
 
-const float gc_arm_kP = 0.043;  // Proportional gain for arm
-const float gc_arm_kD = 0.0;  // Derivative gain for arm
-const float gc_max_volt = 110;
 
-// Read in arm_pid_control, set in autonomous and opcontrol
-int g_arm_target_position = 0; // Target encoder position for the arm
-
-// distance sensor offsets
-float back_distance_from_center = 2;
-float back_distance_between = 9;
-float side_distance_from_center = 1.5;
-float side_distance_between = 11;
-float front_distance_from_center = 6.25;
-float front_distance_between = 9.5;
-
-float vision_x = 0;
-float vision_y = 0;
-
-float distance_kp = 15, distance_ki = 0, distance_kd = 30;
-float heading_correction_kp = 8, heading_correction_ki = 0, heading_correction_kd = 80;
+float distance_kp = 8, distance_ki = 0, distance_kd = 25;
+float heading_correction_kp = 8, heading_correction_ki = 0, heading_correction_kd = 70;
 int max_slew_accel_fwd = 4, max_slew_decel_rev = 4;
+
+float front_distance_from_center = 4.5;
 
 // tool to check if 2 values are "close enough" to each other
 bool check_equal(float val1, float val2, int residual)
@@ -289,7 +234,172 @@ float set_limit(float input, float limit)
 	return input;
 }
 
+void intake_high(float volts)
+{
+	intake_bottom.move(volts);
+	intake_top.move(volts);
+	intake_index.move(volts);
+}
+void intake_middle(float volts)
+{
+	intake_bottom.move(volts);
+	intake_top.move(volts);
+	intake_index.move(-volts);
+}
+void intake_low(float volts)
+{
+	intake_bottom.move(-volts);
+	intake_top.move(-volts);
+	intake_index.move(-volts);
+}
+
 std::vector<lemlib::Pose> poses_holder;
+
+
+void distance_set_odom(int range)
+{
+	
+	lemlib::Pose current_pose = chassis.getPose();
+	float current_x = current_pose.x; // x to use in calculations
+	float current_y = current_pose.y; // y to use in calculations
+	float current_angle = (90-current_pose.theta)*M_PI/180; // convert theta to cartetian angles
+
+
+	// array to store the new x and y values
+ 	float new_x;
+  	float new_y;
+	
+	// angle of laser out of left sensor
+
+	float front_angle = current_angle;
+	float front_distance_y = (distance_front.get()*0.0394+front_distance_from_center)*sin(front_angle)+0;
+	float front_distance_x = (distance_front.get()*0.0394+front_distance_from_center)*cos(front_angle)+0;
+
+
+
+	// front sensor
+
+		//top wall
+		if (check_equal(current_y, 72-front_distance_y, range) && front_distance_y < 72)
+		{
+			new_y = 72-front_distance_y;
+		}
+	 
+	  //right wall
+	   if (check_equal(current_x, 72-front_distance_x, range) && front_distance_x < 72)
+		{
+			new_x = 72-front_distance_x;
+	}
+	   
+	 //bottom wall
+	   if (check_equal(current_y, -72+front_distance_y, range) && front_distance_y < 72)
+		{
+			new_y = -72+front_distance_y;
+	}
+	
+	   //left wall
+	   if (check_equal(current_x, -72+front_distance_x, range) && front_distance_x < 72)
+		{
+			new_x = -72+front_distance_x;
+	}
+
+
+
+		if(new_x != NULL)
+		{
+			chassis.setPose(new_x, current_pose.y, current_pose.theta);
+			ears.set_value(true);
+		}
+		if(new_y != NULL)
+		{
+			chassis.setPose(current_pose.x, new_y, current_pose.theta);
+		}
+}
+
+void mtp_v_cancel(float x, float y, float final_v, bool forward = true, float max_speed = 127, float min_speed = 0, 
+				  float timeout = 5000)
+{
+	chassis.moveToPoint(x, y, timeout, {.forwards = forward, .maxSpeed = max_speed, .minSpeed = min_speed});
+	float dist = hypot(x-chassis.getPose().x, y-chassis.getPose().y);
+	chassis.waitUntil(dist/2);
+
+	float max_velocity = 550;
+	float right_velocity = 550;
+	float left_velocity = 550;
+	float final_v_rpm = final_v/100 * max_velocity;
+
+	while(left_velocity > final_v_rpm || right_velocity > final_v_rpm)
+	{
+		right_velocity = fabs(left_motor_group.get_actual_velocity(0));
+		left_velocity = fabs(right_motor_group.get_actual_velocity(0));
+
+		pros::Task::delay(10);
+	}
+	ears.set_value(true);
+
+	chassis.cancelMotion();
+
+}
+
+void ttp_v_cancel(float x, float y, float final_v, bool forward = true, 
+				  int max_speed = 127, int min_speed = 0, float timeout = 5000)
+{
+	chassis.turnToPoint(x, y, timeout, {.forwards = forward, .maxSpeed = max_speed, .minSpeed = min_speed});
+	float dist = fabs(chassis.getPose().theta -180/M_PI*atan2(y-chassis.getPose().y, x-chassis.getPose().x));
+	chassis.waitUntil(dist/2);
+
+	float max_velocity = 550;
+	float right_velocity = 550;
+	float left_velocity = 550;
+	float final_v_rpm = final_v/100 * max_velocity;
+
+	while(left_velocity > final_v_rpm || right_velocity > final_v_rpm)
+	{
+		right_velocity = fabs(left_motor_group.get_actual_velocity(0));
+		left_velocity = fabs(right_motor_group.get_actual_velocity(0));
+
+		pros::Task::delay(10);
+	}
+	ears.set_value(true);
+
+	chassis.cancelMotion();
+
+}
+
+
+void stp_v_cancel(float x, float y, float final_v, char lockchar, bool forward = true, 
+				  float max_speed = 127, float min_speed = 0, float timeout = 5000)
+{
+	lemlib::DriveSide lockside; 
+	if(lockchar == 'l')
+	{
+		lockside = lemlib::DriveSide::LEFT;
+	}
+	else if(lockchar == 'r')
+	{
+		lockside = lemlib::DriveSide::RIGHT;
+	}
+
+	chassis.swingToPoint(x, y, lockside, timeout, {.forwards = forward, .maxSpeed = max_speed, .minSpeed = min_speed});
+	float dist = fabs(chassis.getPose().theta -180/M_PI*atan2(y-chassis.getPose().y, x-chassis.getPose().x));
+	chassis.waitUntil(dist*1/3);
+
+	float max_velocity = 550;
+	float right_velocity = 550;
+	float left_velocity = 550;
+	float final_v_rpm = final_v/100 * max_velocity;
+
+	while(left_velocity > final_v_rpm || right_velocity > final_v_rpm)
+	{
+		right_velocity = fabs(left_motor_group.get_actual_velocity(0));
+		left_velocity = fabs(right_motor_group.get_actual_velocity(0));
+
+		pros::Task::delay(10);
+	}
+
+	chassis.cancelMotion();
+
+}
 
 void extractPose(std::string address, int num)
 {
@@ -379,7 +489,7 @@ void extractPose(std::string address, int num)
 	path.close();
 }
 
-void followPath(float time_limit_msec, bool exit, double max_output, std::string address, int num, int dir) {
+void followPath(float time_limit_msec, bool exit, float max_output, std::string address, int num, int dir) {
 
 	//pros::screen::print(pros::E_TEXT_SMALL, 0, "0", chassis.getPose().x); // x
 
@@ -394,11 +504,14 @@ void followPath(float time_limit_msec, bool exit, double max_output, std::string
 		std::cout << "x: " << poos.x << " y: " << poos.y << " theta: " << poos.theta << std::endl;
 	}
 
-	double kStanley = 10; // Stanley gain for lateral correction
+	double kpStanley = 14; // Stanley gain for lateral correction
+	double kdStanley = 0;
 
 	const double max_steering_angle = 179.0; // Max steering correction (degrees)
 
 	const double stop_tolerance = 0; // Final stop distance
+
+	float lookahead = 4;
 
 	lemlib::PID pid_distance = lemlib::PID(distance_kp, distance_ki, distance_kd, 3, true);
 
@@ -443,6 +556,9 @@ void followPath(float time_limit_msec, bool exit, double max_output, std::string
 
 	double prev_right_output = 0;
 
+	double last_cross_track_error = 0;
+
+
 	while (target_index < poses_holder.size() && (float)pros::millis() - start_time < time_limit_msec) {
 
 		double robot_x = chassis.getPose().x;
@@ -458,7 +574,7 @@ void followPath(float time_limit_msec, bool exit, double max_output, std::string
 
 		double min_dist = 1e6;
 
-		for (size_t i = target_index-4; i < poses_holder.size(); i++) 
+		for (size_t i = target_index-lookahead; i < poses_holder.size(); i++) 
 		{
 			double dx = poses_holder[i].x - robot_x;
 
@@ -474,9 +590,13 @@ void followPath(float time_limit_msec, bool exit, double max_output, std::string
 			}
 		}
 		
-		target_index+=4;
+		target_index += lookahead;
 
-		if (target_index >= poses_holder.size()-1) { target_index = poses_holder.size()-1;  break; }
+		if (target_index >= poses_holder.size()-1) 
+		{ 
+			target_index = poses_holder.size()-1;  
+			break; 
+		}
 
 		const lemlib::Pose target = poses_holder[target_index];
 
@@ -495,11 +615,11 @@ void followPath(float time_limit_msec, bool exit, double max_output, std::string
 
 		double dy = target_y - robot_y;
 
-		double distance_error = hypot(dx, dy);//dx*sin(robot_heading_rad)+dy*cos(robot_heading_rad);
+		double distance_error = hypot(dx, dy) + (poses_holder.size()-1- target_index);//dx*sin(robot_heading_rad)+dy*cos(robot_heading_rad);
 
 
 
-		double speed = pid_distance.update(distance_error);
+		double speed = 127;//pid_distance.update(distance_error);
 
 
 		//speed = clamp(speed, -max_output, max_output);
@@ -514,9 +634,11 @@ void followPath(float time_limit_msec, bool exit, double max_output, std::string
 
 		double cross_track_error = dx * cos(target_heading_rad) - dy * sin(target_heading_rad);
 
+		double cross_track_derivative = cross_track_error-last_cross_track_error;
+
 		//correction
 
-		double steering_rad = heading_error + atan2(kStanley * cross_track_error * dir, speed);
+		double steering_rad = heading_error + atan2((kpStanley * cross_track_error + kdStanley * cross_track_derivative) * dir, speed);
 
 		//steering_rad = clamp(steering_rad, -lemlib::degToRad(max_steering_angle), lemlib::degToRad(max_steering_angle));
 		
@@ -535,9 +657,9 @@ void followPath(float time_limit_msec, bool exit, double max_output, std::string
 		lemlib::Pose target_pose = {poses_holder[target_index].x, poses_holder[target_index].y, lemlib::degToRad(-poses_holder[target_index].theta+90)};
 		lemlib::Pose next_target_pose = {poses_holder[target_index+1].x, poses_holder[target_index+1].y, lemlib::degToRad(-poses_holder[target_index+1].theta+90)};
 
-		double curvature_scale = 0.03*1/fabs(lemlib::getCurvature(target_pose, next_target_pose));
+		double curvature_scale = 0.05*1/fabs(lemlib::getCurvature(target_pose, next_target_pose));
 		if(curvature_scale > 1) { curvature_scale = 1;}
-		if(curvature_scale < 0.4) { curvature_scale = 0.4;}
+		if(curvature_scale < 0.2) { curvature_scale = 0.2;}
 
 		pros::screen::print(pros::E_TEXT_SMALL, 4, "%2f", curvature_scale);
 		// output
@@ -578,6 +700,9 @@ void followPath(float time_limit_msec, bool exit, double max_output, std::string
 
 		prev_right_output = right_output;
 
+		last_cross_track_error = cross_track_error;
+
+
 		// Clamp and drive
 /*
 		//scaleToMax(left_output, right_output, max_output);
@@ -614,9 +739,9 @@ void followPath(float time_limit_msec, bool exit, double max_output, std::string
 	right_motor_group.move(0);
 	
 	if(dir == 1) 
-	{chassis.moveToPoint(poses_holder[target_index].x, poses_holder[target_index].y, 1000);}
+	{chassis.moveToPoint(poses_holder[target_index].x, poses_holder[target_index].y, 1000, {.maxSpeed = max_output}, false);}
 	else if(dir == -1) 
-	{chassis.moveToPoint(poses_holder[target_index].x, poses_holder[target_index].y, 1000, {.forwards = false});}
+	{chassis.moveToPoint(poses_holder[target_index].x, poses_holder[target_index].y, 1000, {.forwards = false, .maxSpeed = max_output}, false);}
 
 }
 
@@ -631,9 +756,12 @@ void brain_data_output()
             // print robot location to the brain screen
             pros::screen::print(pros::E_TEXT_SMALL, 0, "X: %f", chassis.getPose().x); // x
             pros::screen::print(pros::E_TEXT_SMALL, 1, "Y: %f", chassis.getPose().y); // y
-            pros::screen::print(pros::E_TEXT_SMALL, 2, "Theta: %f", chassis.getPose().theta); // heading	
-
-
+            pros::screen::print(pros::E_TEXT_SMALL, 2, "Theta: %f", chassis.getPose().theta); // heading
+			
+			float dist = distance_front.get()*0.0394;
+            pros::screen::print(pros::E_TEXT_SMALL, 3, "Distance: %f", dist); // heading	
+			float angle_error = chassis.getPose().theta -180/M_PI*atan2(24-chassis.getPose().y, 24-chassis.getPose().x);
+            pros::screen::print(pros::E_TEXT_SMALL, 5, "Angle Error: %f", angle_error);
 
             // delay to save resources
             pros::delay(20);
@@ -649,15 +777,6 @@ void brain_data_output()
  * to keep execution time for this mode under a few seconds.
  */
 void initialize() {
-
-	//std::ifstream constants_holder("/usd/constants_holder.txt", std::ios::in);
-	//int large_kp = 25;
-	//constants_holder >> large_kp;
-	//constants_holder >> large_ki;
-	//constants_holder >> large_kd;
-	
-	//constants_holder.close();
-		//std::cout<< "zero" <<std::endl;
 
 	chassis.calibrate(); // calibrate sensor
 	vertical_encoder.set_position(0); // set the vertical encoder to 0
@@ -700,21 +819,124 @@ void competition_initialize()
 void autonomous() {
 	g_auton_started = true;
 	std::cout<< "zero" <<std::endl;
-	chassis.setPose(-48, 24, 270); 
+	
 
 	brain_data_output(); // print values to the brain screen
-	chassis.moveToPoint(-24, 24, 5000, {.forwards = false, .maxSpeed = 100});
-	chassis.turnToHeading(55, 5000, {.maxSpeed = 100}, false);
+	/*
+	{
+	chassis.setPose(48, -18, 180); 
+	//chassis.moveToPoint(48, -49, 3000, {.maxSpeed = 127});
+	scraper.set_value(true);
+	hood.set_value(false);
+	mtp_v_cancel(48, -49, 12);
+	//chassis.turnToPoint(72, -49, 1000, {.maxSpeed = 127});
+	ttp_v_cancel(72, -49, 15);
+	intake_high(127);
+	chassis.moveToPoint(60, -49, 1000, {.maxSpeed = 127}, false);
+	pros::Task::delay(400);
+	chassis.moveToPoint(30, -49, 800, {.forwards = false, .maxSpeed = 127}, false);
+	scraper.set_value(false);
+	chassis.setPose(33, -48, chassis.getPose().theta); 
+	hood.set_value(true);
+	pros::Task::delay(1000);
+	
 
-	followPath(50000, true, 100, "HS_neg.txt", 2, 1);
+	//chassis.swingToPoint(20, -24,lemlib::DriveSide::LEFT, 3000, {.maxSpeed = 127}, false);
+	stp_v_cancel(20, -24, 15, 'l');
+	hood.set_value(false);
+	//chassis.turnToPoint(28, -28, 1500, {.maxSpeed = 60});
 
+	//chassis.moveToPoint(28, -28, 3000, {.maxSpeed = 127});
+	intake_middle(0);
+	intake_high(127);
+
+	chassis.moveToPoint(20, -24, 300, {});
+	chassis.moveToPoint(20, -24, 500, {.maxSpeed = 50});
+	
+	chassis.turnToPoint(9, -13, 2000, {.forwards = false});
+
+	//chassis.moveToPoint(9, -13, 3000, {.forwards = false}, false);
+	mtp_v_cancel(9, -13, 10, false);
+	chassis.moveToPoint(0, -4, 700, {.forwards = false, .maxSpeed = 30});
+
+	intake_high(0);
+	intake_middle(127);
+	pros::Task::delay(1000);
+	//chassis.swingToPoint(20, 24,lemlib::DriveSide::LEFT, 3000, {.maxSpeed = 127});
+	stp_v_cancel(19, 16, 15, 'l');
+	//distance_set_odom(6);
+	
+	intake_middle(0);
+	intake_high(127);
+	//chassis.moveToPoint(20, 20, 3000, {.maxSpeed = 127});
+	mtp_v_cancel(19, 16, 15);
+
+	//chassis.swingToPoint(44, 48, lemlib::DriveSide::RIGHT, 500,{}, false);
+	stp_v_cancel(44, 48, 15, 'r');
+
+	//distance_set_odom(6);
+	//chassis.moveToPoint(44, 48, 3000,{}, false);
+	mtp_v_cancel(44, 46, 15);
+
+	scraper.set_value(true);
+
+	//chassis.turnToPoint(72, 48, 1000, {.maxSpeed = 127});
+	ttp_v_cancel(72, 46, 15);
+	//distance_set_odom(6);
+
+	chassis.moveToPoint(57, 48, 800, {.maxSpeed = 127}, false);
+	pros::Task::delay(400);
+	chassis.moveToPoint(28, 48, 800, {.forwards = false, .maxSpeed = 127}, false);
+	scraper.set_value(false);
+	hood.set_value(true);
+	}
+*/
+	{
+	chassis.setPose(48, 18, 0); 
+	scraper.set_value(true);
+	hood.set_value(false);
+	mtp_v_cancel(48, 49, 12);
+	ttp_v_cancel(72, 49, 15);
+	intake_high(127);
+	chassis.moveToPoint(60, 48, 1000, {.maxSpeed = 127}, false);
+	pros::Task::delay(850);
+	chassis.moveToPoint(30, 48, 800, {.forwards = false, .maxSpeed = 127}, false);
+	scraper.set_value(false);
+	chassis.setPose(33, 48, chassis.getPose().theta); 
+	hood.set_value(true);
+	pros::Task::delay(1500);
+
+	stp_v_cancel(24, 24, 15, 'r');
+	hood.set_value(false);
+	mtp_v_cancel(24, 24, 15);
+	stp_v_cancel(-18, 22, 20, 'r');
+	mtp_v_cancel(-18, 22, 15);
+
+
+	stp_v_cancel(-40, 45, 20, 'r');
+	mtp_v_cancel(-40, 47, 10);
+	ttp_v_cancel(-30, 47, 15, false);
+	chassis.moveToPoint(30, 47
+		, 800, {.forwards = false}, false);
+	chassis.setPose(-33, 48, chassis.getPose().theta); 
+	hood.set_value(true);
+	pros::Task::delay(1500);
+
+
+
+
+	}
+	//followPath(50000, true, 100, "win_point_pb.txt", 1, 1);
+	//followPath(50000, true, 127, "win_point_pb.txt", 2, -1);
+	//followPath(50000, true, 127, "win_point_pb.txt", 3, 1);
+	//followPath(50000, true, 127, "win_point_pb.txt", 4, -1);
 
 
 	// set position to x:0, y:0, heading:0
     // turn to face heading 90 with a very long timeout
 	//chassis.setPose(0,0,0);
-    //chassis.turnToHeading(180, 10000, {.maxSpeed = 30});
-
+    //chassis.turnToHeading(90, 10000);
+	//chassis.moveToPoint(0, 36, 9999);
 
 }
 
@@ -735,16 +957,11 @@ void autonomous() {
 void opcontrol() {
 	
 	//followPath(5000, true, 127, "stanley.txt", 1);
-
-		 
-	//pros::screen::print(pros::E_TEXT_SMALL, 0, "%s" , std::filesystem::current_path()); // x
-
 	
 	controller.print(0, 0, "program started");
 	g_auton_started = true;
 	g_op_control_started = true;
 	brain_data_output();
-    chassis.setPose(0, 0, 0);
 
 
 // this task runs the lights during the opc period
@@ -768,116 +985,73 @@ void opcontrol() {
 	pros::Task driver_systems_task([&]() {
 	while (true)
 	{
-		if (controller.get_digital(pros::E_CONTROLLER_DIGITAL_R2))
+		if (controller.get_digital(pros::E_CONTROLLER_DIGITAL_R1))
 		{
-			intake_motor_group.move(-127);
+			intake_bottom.move(127);
+			intake_top.move(127);
+			intake_index.move(127);
 		}
-		else if (controller.get_digital(pros::E_CONTROLLER_DIGITAL_R1))
+		else if (controller.get_digital(pros::E_CONTROLLER_DIGITAL_R2))
 		{
-			intake_motor_group.move(127);
-
-
+			intake_bottom.move(-127);
+			intake_top.move(-127);
+			intake_index.move(-127);
+		}
+		else if (controller.get_digital(pros::E_CONTROLLER_DIGITAL_L1))
+		{
+			intake_bottom.move(127);
+			intake_top.move(127);
+			intake_index.move(-127);
 		}
 		else
 		{
-			intake_motor_group.move(0);
+			intake_bottom.move(0);
+			intake_top.move(0);
+			intake_index.move(0);
 		}
 
-		// toggle claw mode
-		if (controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_DOWN))
+		if(controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_B))
 		{
-			if(g_claw_mode)
+			if(g_ears_state)
 			{
-				g_claw_mode = false;
-				controller.print(0, 0, "claw setting: %i", g_claw_mode);
-
+				ears.set_value(false);
+				g_ears_state = false;
 			}
 			else
 			{
-				g_claw_mode = true;
-				controller.print(0, 0,"claw setting: %i", g_claw_mode);
+
+				ears.set_value(true);
+				g_ears_state = true;
 
 			}
 		}
 
-		if (controller.get_digital(pros::E_CONTROLLER_DIGITAL_Y))
+		if(controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_RIGHT))
 		{
-			g_high_stake = true;
-			intake_motor_group.move(-95);
-
-			pros::Task::delay(300);
-			intake_motor_group.move(60);
-
-			int counter = 0;
-
-			while(distance_sort.get() > 50 && counter < 2000)
+			if(g_hood_state)
 			{
-				pros::Task::delay(5);
-				counter +=5;
-			}
-
-			intake_motor_group.move(0);
-			g_arm_target_position = 0;
-		}
-
-		if (controller.get_digital(pros::E_CONTROLLER_DIGITAL_L1))
-		{
-			if (g_pto_setting == false)
-			{
-				mogo.set_value(true);
-				g_mogo_setting = true;
+				hood.set_value(false);
+				g_hood_state = false;
 			}
 			else
 			{
-				hook.set_value(true);
-				g_hook_setting = true;
+				hood.set_value(true);
+				g_hood_state = true;
+
 			}
 		}
-		else if (controller.get_digital(pros::E_CONTROLLER_DIGITAL_L2))
+
+		if(controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_Y))
 		{
-			if (g_pto_setting == false)
+			if(g_scraper_state)
 			{
-				mogo.set_value(false);
-				g_mogo_setting = false;
+				scraper.set_value(false);
+				g_scraper_state = false;
 			}
 			else
 			{
-				hook.set_value(false);
-				g_hook_setting = false;
-			}
-
-		}
-
-		if(controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_X)){
-			
-			if (g_hook_setting == false){
-				hook.set_value(true);
-				g_hook_setting = true;
-			} else {
-				hook.set_value(false);
-				g_hook_setting = false;
-			}
-		}
-		if(controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_B)){
-			
-			if (g_intake_direction != 0.5){
-
-				g_intake_direction = 0.5;
-			} else {
-				g_intake_direction = 1;
-			}
-		}
-
-		if(controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_RIGHT)){
-			
-			if (g_pto_setting == false){
-				pto.set_value(true);
-				g_pto_setting = true;
-
-			} else {
-				pto.set_value(false);
-				g_pto_setting = false;
-
+				scraper.set_value(true);
+				g_scraper_state = true;
 			}
 		}
 		
@@ -887,7 +1061,6 @@ void opcontrol() {
 
 
 
-    // loop till climb
     while (true) {
 		// get left y and right x positions
 		int leftY = controller.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_Y);
