@@ -58,8 +58,8 @@ pros::Motor back_motor(5, pros::MotorGears::blue); // back right motor on port 5
 
 //intake_motors
 pros::Motor intake_bottom(8, pros::MotorGears::blue); // intake motor on port 19
-pros::Motor intake_top(10, pros::MotorGears::blue); // lift motor on port 12
-pros::Motor intake_index(9, pros::MotorGears::blue); // lift motor on port 12
+pros::Motor intake_top(10, pros::MotorGears::green); // lift motor on port 12
+pros::Motor intake_index(9, pros::MotorGears::green); // lift motor on port 12
 
 // condensed motors into motor groups
 pros::MotorGroup left_motor_group({-11, 12, -13}, pros::MotorGears::blue); //the right side of the drivetrain
@@ -246,8 +246,20 @@ void intake_high(float volts)
 void intake_middle(float volts)
 {
 	intake_bottom.move(volts);
+
 	intake_top.move(volts);
-	intake_index.move(-volts);
+	pros::Task indexer_velocity_task([&]() {
+
+		if(volts/127*200 > intake_index.get_actual_velocity())
+		{
+			intake_index.move(intake_index.get_voltage()/1000 + 5 );
+		}
+		else if(volts/127*200 < intake_index.get_actual_velocity())
+		{
+			intake_index.move(intake_index.get_voltage()/1000 - 5 );
+		}
+	});
+
 }
 void intake_low(float volts)
 {
@@ -319,29 +331,48 @@ void distance_set_odom(int range)
 		}
 }
 */
-void mtp_v_cancel(float x, float y, float final_v, bool ballpile = false, bool forward = true, float max_speed = 127, float min_speed = 0, 
+void mtp_v_cancel(float x, float y, float final_v, bool ballpile = false, bool forward = true, float max_speed = 127, 
 				  float timeout = 5000)
 {
-	chassis.moveToPoint(x, y, timeout, {.forwards = forward, .maxSpeed = max_speed, .minSpeed = min_speed});
 	
-	float target_theta_rot = atan2(y, x);
-	float rotated_target_y = -sin(target_theta_rot) * x + cos(target_theta_rot) * y;
+	float target_theta_rot = atan2(x, y);
+	float target_y_rot = -sin(target_theta_rot) * x + cos(target_theta_rot) * y;
 
-	float rotated_current_y;
-	
+	float current_theta_rot = atan2(chassis.getPose().x, chassis.getPose().y);
+	float current_y_rot = -sin(target_theta_rot) * chassis.getPose().x 
+						  + cos(target_theta_rot) * chassis.getPose().y;
+
+	int above_below;
+
+	if(target_y_rot > current_y_rot)
+	{
+		above_below = 1;
+	}
+	else
+	{
+		above_below = -1;
+	}
+
 	float dist = hypot(x-chassis.getPose().x, y-chassis.getPose().y);
-
-	chassis.waitUntil(dist/2);
 
 	float max_velocity = 550;
 	float right_velocity = 550;
 	float left_velocity = 550;
-	float final_v_rpm = final_v/100 * max_velocity;
+	float final_v_volt = final_v/100 * 127;
 
-	while(left_velocity > final_v_rpm || right_velocity > final_v_rpm)
+	chassis.moveToPoint(x, y, timeout, {.forwards = forward, .maxSpeed = max_speed, .minSpeed = final_v_volt});
+
+
+	chassis.waitUntil(dist/2);
+
+
+
+	while((above_below * (target_y_rot - current_y_rot) > 0) && chassis.isInMotion())
 	{
-		right_velocity = fabs(left_motor_group.get_actual_velocity(0));
-		left_velocity = fabs(right_motor_group.get_actual_velocity(0));
+
+		current_theta_rot = atan2(chassis.getPose().x, chassis.getPose().y);
+	 	current_y_rot = -sin(target_theta_rot) * chassis.getPose().x 
+						  + cos(target_theta_rot) * chassis.getPose().y;
 
 		if(ballpile)
 		{
@@ -353,6 +384,7 @@ void mtp_v_cancel(float x, float y, float final_v, bool ballpile = false, bool f
 		}
 		pros::Task::delay(10);
 	}
+
 	if(ballpile) {scraper.set_value(false);}
 	chassis.cancelMotion();
 
@@ -919,7 +951,7 @@ void autonomous() {
 	hood.set_value(true);
 	}
 */
-	
+/*
 // left middle + long
 	chassis.setPose(45, -12, 270); 
 	intake_high(127);
@@ -948,7 +980,8 @@ void autonomous() {
 	chassis.moveToPoint(27, -47, 800, {.forwards = false, .maxSpeed = 127}, false);
 	chassis.moveToPoint(27, -47, 1700, {.forwards = false, .maxSpeed = 20});
 	hood.set_value(true);
-/*	
+	*/
+	
 	//part 1
 
 	chassis.setPose(48, 18, 0); 
@@ -981,7 +1014,7 @@ void autonomous() {
 	stp_v_cancel(-40, 48, 20, 'r');
 	mtp_v_cancel(-40, 48, 10);
 	ttp_v_cancel(-30, 48, 15, false);
-	chassis.moveToPoint(30, 48, 800, {.forwards = false}, false);
+	chassis.moveToPoint(30, 48, 800, {.forwards = false, .maxSpeed = 90}, false);
 	chassis.moveToPoint(30, 48, 1500, {.forwards = false, .maxSpeed = 20});
 
 	hood.set_value(true);
@@ -1005,12 +1038,13 @@ void autonomous() {
 	chassis.moveToPoint(-15.5, 14.5, 3000, {.forwards = false});
 	scraper.set_value(false);
 
-	chassis.moveToPoint(72, -72, 3000, {.forwards = false, .maxSpeed = 40});
+	chassis.moveToPoint(72, -72, 3000, {.forwards = false, .maxSpeed = 70});
 	intake_middle(90);	
 	pros::Task::delay(3000);
 	intake_middle(0);
-
 	intake_high(127);
+	chassis.setPose(-14, 14, chassis.getPose().theta);
+
 	stp_v_cancel(-23, -21, 10, 'l');
 	mtp_v_cancel(-23, -21, 15, true);
 	stp_v_cancel(-48, -49, 15, 'r');
@@ -1060,7 +1094,7 @@ void autonomous() {
 	ttp_v_cancel(63, 0, 10, false);
 	chassis.moveToPoint(63, 0, 5500, {.forwards = false});
 	intake_high(0);
-*/
+
 	//followPath(50000, true, 100, "win_point_pb.txt", 1, 1);
 	//followPath(50000, true, 127, "win_point_pb.txt", 2, -1);
 	//followPath(50000, true, 127, "win_point_pb.txt", 3, 1);
