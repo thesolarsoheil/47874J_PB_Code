@@ -45,21 +45,14 @@ enum IntakeDirection
 // if a 3 wire has a number for the port, the number is just the letter of the port. 
 //ex: 1 = A, 2 = B, 3 = C, 4 = D
 
-// drive motors
-pros::Motor front_left_motor(-11, pros::MotorGears::blue); // front left motor on port 9
-pros::Motor middle_left_motor(12, pros::MotorGears::blue); // middle left motor on port 20
-pros::Motor front_motor(-13, pros::MotorGears::blue); // back left motor on port 10
-pros::Motor front_right_motor(2, pros::MotorGears::blue); // front right motor on port 2
-pros::Motor middle_right_motor(-3, pros::MotorGears::blue); // middle right motor on port 11
-pros::Motor back_motor(5, pros::MotorGears::blue); // back right motor on port 5
 
 //pros::Motor teammate_motor(4, pros::MotorGears::blue); // back right motor on port 5
 
 
 //intake_motors
 pros::Motor intake_bottom(8, pros::MotorGears::blue); // intake motor on port 19
-pros::Motor intake_top(10, pros::MotorGears::blue); // lift motor on port 12
-pros::Motor intake_index(9, pros::MotorGears::blue); // lift motor on port 12
+pros::Motor intake_top(10, pros::MotorGears::green); // lift motor on port 12
+pros::Motor intake_index(-9, pros::MotorGears::green); // lift motor on port 12
 
 // condensed motors into motor groups
 pros::MotorGroup left_motor_group({-11, 12, -13}, pros::MotorGears::blue); //the right side of the drivetrain
@@ -76,6 +69,7 @@ lemlib::Drivetrain drivetrain_6m(&left_motor_group, //motors that are on the lef
 // create an imu on port 12
 pros::Imu imu(7);
 
+pros::ADIDigitalOut park(4);
 pros::ADIDigitalOut ears(3);
 pros::ADIDigitalOut scraper(2);
 pros::ADIDigitalOut hood(1);
@@ -162,7 +156,7 @@ bool g_auton_started = false; // determines whether the autonamous code has been
 bool g_op_control_started = false; // determines whether the driver code has been started
 
 // get and set in autonomous()
-int g_current_auton_select = 2; // determines which auton path is going to be run
+int chosen_auto = 0; // determines which auton path is going to be run
 
 // set in color_select(), get in color_sorting() and autonomous()
 int g_team_color = BLUE; //red = 1, blue = -1
@@ -174,7 +168,9 @@ float g_intake_direction = 1;
 float g_ears_state = false;
 float g_scraper_state = false;
 float g_hood_state = false;
+float g_park_state = false;
 
+float top_target_speed = 0, bottom_target_speed = 0, index_target_speed = 0;
 
 float distance_kp = 8, distance_ki = 0, distance_kd = 25;
 float heading_correction_kp = 8, heading_correction_ki = 0, heading_correction_kd = 70;
@@ -230,12 +226,24 @@ void ramsete(float target_x, float target_y, float target_theta, float input_v, 
 
 float set_limit(float input, float limit)
 {
-	if (input > limit)
-		input = limit;
+	float output = input;
+	if (output > limit)
+		output = limit;
 	else if(input < -limit)
-		input = -limit;
-	return input;
+		output = -limit;
+	return output;
 }
+float set_upperlower_limit(float input, float ceiling, float floor)
+{
+	float output = input;
+	if (output > ceiling)
+		output = ceiling;
+	else if(input < floor)
+		output = floor;
+	return output;
+}
+
+
 
 void intake_high(float volts)
 {
@@ -246,8 +254,10 @@ void intake_high(float volts)
 void intake_middle(float volts)
 {
 	intake_bottom.move(volts);
+
 	intake_top.move(volts);
 	intake_index.move(-volts);
+
 }
 void intake_low(float volts)
 {
@@ -255,6 +265,7 @@ void intake_low(float volts)
 	intake_top.move(-volts);
 	intake_index.move(-volts);
 }
+
 
 std::vector<lemlib::Pose> poses_holder;
 
@@ -319,29 +330,48 @@ void distance_set_odom(int range)
 		}
 }
 */
-void mtp_v_cancel(float x, float y, float final_v, bool ballpile = false, bool forward = true, float max_speed = 127, float min_speed = 0, 
+void mtp_v_cancel(float x, float y, float final_v, bool ballpile = false, bool forward = true, float max_speed = 127, 
 				  float timeout = 5000)
 {
-	chassis.moveToPoint(x, y, timeout, {.forwards = forward, .maxSpeed = max_speed, .minSpeed = min_speed});
 	
-	float target_theta_rot = atan2(y, x);
-	float rotated_target_y = -sin(target_theta_rot) * x + cos(target_theta_rot) * y;
+	float target_theta_rot = atan2(x, y);
+	float target_y_rot = -sin(target_theta_rot) * x + cos(target_theta_rot) * y;
 
-	float rotated_current_y;
-	
+	float current_theta_rot = atan2(chassis.getPose().x, chassis.getPose().y);
+	float current_y_rot = -sin(target_theta_rot) * chassis.getPose().x 
+						  + cos(target_theta_rot) * chassis.getPose().y;
+
+	int above_below;
+
+	if(target_y_rot > current_y_rot)
+	{
+		above_below = 1;
+	}
+	else
+	{
+		above_below = -1;
+	}
+
 	float dist = hypot(x-chassis.getPose().x, y-chassis.getPose().y);
-
-	chassis.waitUntil(dist/2);
 
 	float max_velocity = 550;
 	float right_velocity = 550;
 	float left_velocity = 550;
-	float final_v_rpm = final_v/100 * max_velocity;
+	float final_v_volt = final_v/100 * 127;
 
-	while(left_velocity > final_v_rpm || right_velocity > final_v_rpm)
+	chassis.moveToPoint(x, y, timeout, {.forwards = forward, .maxSpeed = max_speed, .minSpeed = final_v_volt});
+
+
+	chassis.waitUntil(dist/2);
+
+
+
+	while((above_below * (target_y_rot - current_y_rot) > 0) && chassis.isInMotion())
 	{
-		right_velocity = fabs(left_motor_group.get_actual_velocity(0));
-		left_velocity = fabs(right_motor_group.get_actual_velocity(0));
+
+		current_theta_rot = atan2(chassis.getPose().x, chassis.getPose().y);
+	 	current_y_rot = -sin(target_theta_rot) * chassis.getPose().x 
+						  + cos(target_theta_rot) * chassis.getPose().y;
 
 		if(ballpile)
 		{
@@ -353,6 +383,7 @@ void mtp_v_cancel(float x, float y, float final_v, bool ballpile = false, bool f
 		}
 		pros::Task::delay(10);
 	}
+
 	if(ballpile) {scraper.set_value(false);}
 	chassis.cancelMotion();
 
@@ -377,7 +408,6 @@ void ttp_v_cancel(float x, float y, float final_v, bool forward = true,
 
 		pros::Task::delay(10);
 	}
-	ears.set_value(true);
 
 	chassis.cancelMotion();
 
@@ -546,36 +576,7 @@ void followPath(float time_limit_msec, bool exit, float max_output, std::string 
 	lemlib::PID pid_distance = lemlib::PID(distance_kp, distance_ki, distance_kd, 3, true);
 
 	lemlib::PID pid_heading = lemlib::PID(heading_correction_kp, heading_correction_ki, heading_correction_kd, 1, true);
-/*
-	//pid_distance.update(0);
-	//pid_heading.update(0);
 
-
-	//pid_distance.setTarget(0);
-
-	//pid_distance.setIntegralMax(3);
-
-	//pid_distance.setSmallBigErrorTolerance(threshold, threshold * 3);
-
-	//pid_distance.setSmallBigErrorDuration(50, 250);
-
-	//pid_distance.setDerivativeTolerance(5);
-
-
-	//pid_heading.setTarget(normalizeTarget(getInertialHeading()));
-
-	//pid_heading.setIntegralMax(0);
-
-	//pid_heading.setIntegralRange(1);
-
-	//pid_heading.setSmallBigErrorTolerance(0, 0);
-
-	//pid_heading.setSmallBigErrorDuration(0, 0);
-
-	//pid_heading.setDerivativeTolerance(0);
-
-	//pid_heading.setArrive(false);
-   */
 
 	float start_time = pros::millis(); 
 	//pros::screen::print(pros::E_TEXT_SMALL, 4, "timer started"); // x
@@ -700,31 +701,6 @@ void followPath(float time_limit_msec, bool exit, float max_output, std::string 
 		
 		//pros::screen::print(pros::E_TEXT_SMALL, 3, "%d", speed); // x
 
-		// slew
-/*
-		if (left_output - prev_left_output > max_slew_accel_fwd) {
-
-		left_output = prev_left_output + max_slew_accel_fwd;
-
-		} else if (prev_left_output - left_output > max_slew_decel_rev) {
-
-		left_output = prev_left_output - max_slew_decel_rev;
-
-		}
-*/
-		//left_output = set_limit(left_output, max_slew_accel_fwd+prev_left_output);
-/*
-		if (right_output - prev_right_output > max_slew_accel_fwd) {
-
-		right_output = prev_right_output + max_slew_accel_fwd;
-
-		} else if (prev_right_output - right_output > max_slew_decel_rev) {
-
-		right_output = prev_right_output - max_slew_decel_rev;
-
-		}
-		*/
-		//right_output = set_limit(right_output, max_slew_accel_fwd + prev_right_output);
 
 		prev_left_output = left_output;
 
@@ -787,9 +763,7 @@ void brain_data_output()
             pros::screen::print(pros::E_TEXT_SMALL, 0, "X: %f", chassis.getPose().x); // x
             pros::screen::print(pros::E_TEXT_SMALL, 1, "Y: %f", chassis.getPose().y); // y
             pros::screen::print(pros::E_TEXT_SMALL, 2, "Theta: %f", chassis.getPose().theta); // heading
-			
-			float angle_error = chassis.getPose().theta -180/M_PI*atan2(24-chassis.getPose().y, 24-chassis.getPose().x);
-            pros::screen::print(pros::E_TEXT_SMALL, 5, "Angle Error: %f", angle_error);
+            pros::screen::print(pros::E_TEXT_SMALL, 3, "Auto: %d", chosen_auto); // auto
 
             // delay to save resources
             pros::delay(20);
@@ -808,6 +782,19 @@ void initialize() {
 
 	chassis.calibrate(); // calibrate sensor
 	vertical_encoder.set_position(0); // set the vertical encoder to 0
+	brain_data_output();
+
+	pros::Task auton_seletor_task([&]() {	
+		pros::screen_touch_status_s_t status;
+
+		while(g_auton_started == false)
+		{
+		 	status = pros::screen::touch_status();
+			chosen_auto = 1+(status.press_count % 4);
+			pros::Task::delay(10);
+		}
+		
+	});
 
 }
 
@@ -830,7 +817,7 @@ void disabled() {}
  */
 void competition_initialize() 
 {
-
+	
 }
 
 /**
@@ -846,221 +833,254 @@ void competition_initialize()
  */
 void autonomous() {
 	g_auton_started = true;
-	std::cout<< "zero" <<std::endl;
+	pros::Task::delay(20);
+	chosen_auto = 4;
 	
-
-	brain_data_output(); // print values to the brain screen
-	/*
+	if(chosen_auto == 1)
 	{
-	chassis.setPose(48, -18, 180); 
-	//chassis.moveToPoint(48, -49, 3000, {.maxSpeed = 127});
-	scraper.set_value(true);
-	hood.set_value(false);
-	mtp_v_cancel(48, -49, 12);
-	//chassis.turnToPoint(72, -49, 1000, {.maxSpeed = 127});
-	ttp_v_cancel(60, -49, 15);
-	intake_high(127);
-	chassis.moveToPoint(60, -49, 1000, {.maxSpeed = 127}, false);
-	pros::Task::delay(400);
-	chassis.moveToPoint(30, -49, 800, {.forwards = false, .maxSpeed = 127}, false);
-	scraper.set_value(false);
-	chassis.setPose(33, -48, chassis.getPose().theta); 
-	hood.set_value(true);
-	pros::Task::delay(1000);
-	
+		chassis.setPose(48, -18, 180); 
+		
+		scraper.set_value(true);
+		hood.set_value(false);
+		mtp_v_cancel(48, -48, 12);
 
-	//chassis.swingToPoint(20, -24,lemlib::DriveSide::LEFT, 3000, {.maxSpeed = 127}, false);
-	stp_v_cancel(20, -24, 15, 'l');
-	hood.set_value(false);
-	//chassis.turnToPoint(28, -28, 1500, {.maxSpeed = 60});
+		ttp_v_cancel(66, -48, 15);
+		intake_high(100);
+		chassis.moveToPoint(66, -48, 1000, {.maxSpeed = 127}, false);
+		pros::Task::delay(300);
+		chassis.moveToPose(28, -48, 90, 1500, {.forwards = false}, false);
+		scraper.set_value(false);
+		chassis.setPose(33, -48, chassis.getPose().theta); 
+		hood.set_value(true);
+		pros::Task::delay(1000);
 
-	//chassis.moveToPoint(28, -28, 3000, {.maxSpeed = 127});
-	intake_middle(0);
-	intake_high(127);
+		mtp_v_cancel(36, -48, 40);
+		stp_v_cancel(22, -23, 15, 'l');
+		hood.set_value(false);
 
-	chassis.moveToPoint(20, -24, 300, {});
-	chassis.moveToPoint(20, -24, 500, {.maxSpeed = 50});
-	
-	chassis.turnToPoint(9, -13, 2000, {.forwards = false});
+		intake_middle(0);
+		intake_high(100);
 
-	//chassis.moveToPoint(9, -13, 3000, {.forwards = false}, false);
-	mtp_v_cancel(9, -13, 10, false, false);
-	chassis.moveToPoint(0, -4, 700, {.forwards = false, .maxSpeed = 30});
+		mtp_v_cancel(22, -23, 10, true);
+		scraper.set_value(true);
+		chassis.turnToPoint(12, -13, 1500, {.forwards = false});
 
-	intake_high(0);
-	intake_middle(127);
-	pros::Task::delay(1000);
-	//chassis.swingToPoint(20, 24,lemlib::DriveSide::LEFT, 3000, {.maxSpeed = 127});
-	stp_v_cancel(19, 16, 15, 'l');
-	//distance_set_odom(6);
-	
-	intake_middle(0);
-	intake_high(127);
-	//chassis.moveToPoint(20, 20, 3000, {.maxSpeed = 127});
-	mtp_v_cancel(19, 16, 15);
+		mtp_v_cancel(12, -13, 10, false, false);
+		chassis.moveToPoint(0, -4, 700, {.forwards = false, .maxSpeed = 30});
 
-	//chassis.swingToPoint(44, 48, lemlib::DriveSide::RIGHT, 500,{}, false);
-	stp_v_cancel(44, 49, 15, 'r');
+		intake_high(0);
+		intake_middle(50);
+		pros::Task::delay(1000);
+		scraper.set_value(false);
+		chassis.setPose(14, -14, chassis.getPose().theta);
+		stp_v_cancel(22, 24, 15, 'l');
+		
+		intake_middle(0);
+		intake_high(100);
+		mtp_v_cancel(22, 24, 15, true);
+		scraper.set_value(true);
 
-	//distance_set_odom(6);
-	//chassis.moveToPoint(44, 48, 3000,{}, false);
-	mtp_v_cancel(44, 49, 15);
+		stp_v_cancel(48, 47.5, 15, 'r');
 
-	scraper.set_value(true);
+		mtp_v_cancel(48, 47.5, 5);
 
-	//chassis.turnToPoint(72, 48, 1000, {.maxSpeed = 127});
-	ttp_v_cancel(72, 49, 15);
-	//distance_set_odom(6);
 
-	chassis.moveToPoint(57, 49, 800, {.maxSpeed = 127}, false);
-	pros::Task::delay(400);
-	chassis.moveToPoint(28, 49, 800, {.forwards = false, .maxSpeed = 127}, false);
-	scraper.set_value(false);
-	hood.set_value(true);
+		ttp_v_cancel(72, 47.5, 10);
+
+		chassis.moveToPoint(72, 47.5, 800, {.maxSpeed = 127}, false);
+		pros::Task::delay(350);
+		chassis.moveToPose(27, 47.5, 90, 1500, {.forwards = false}, false);
+
+		scraper.set_value(false);
+		hood.set_value(true);
 	}
-*/
 	
-// left middle + long
-	chassis.setPose(45, -12, 270); 
-	intake_high(127);
-	hood.set_value(false);
-	stp_v_cancel(24, -24, 15, 'l');
-	mtp_v_cancel(24, -24, 25, true);
+	// left middle + long
+	if(chosen_auto == 2)
+	{
+		chassis.setPose(43.5, -12, 270); 
+		intake_high(100);
+		hood.set_value(false);
+		stp_v_cancel(24, -24, 15, 'l');
+		mtp_v_cancel(24, -24, 25, true);
 
-	ttp_v_cancel(6, -43, 10, 'l');
-	mtp_v_cancel(6, -43, 15);
-	scraper.set_value(true);
-	ttp_v_cancel(24, -24, 15, false);
-	mtp_v_cancel(24, -24, 15, false, false);
-	ttp_v_cancel(14, -14, 10, false);
-	mtp_v_cancel(14, -14, 15, false, false);
-	chassis.moveToPoint(-72, 72, 1000, {.forwards = false, .maxSpeed = 20});
-	intake_high(0);
-	intake_middle(127);
-	pros::Task::delay(1000);
-	intake_middle(0);
-	mtp_v_cancel(48, -47, 15);
-	intake_high(127);
-	ttp_v_cancel(67, -47, 10);
- 	chassis.moveToPoint(65, -47, 300, {.maxSpeed = 127}, false);
-	chassis.moveToPoint(65, -47, 500, {.maxSpeed = 60}, false);
-	chassis.moveToPoint(65, -47, 400, {.maxSpeed = 20}, false);
-	chassis.moveToPoint(27, -47, 800, {.forwards = false, .maxSpeed = 127}, false);
-	chassis.moveToPoint(27, -47, 1700, {.forwards = false, .maxSpeed = 20});
-	hood.set_value(true);
-/*	
-	//part 1
+		ttp_v_cancel(7, -42, 10, 'l');
+		mtp_v_cancel(7, -42, 15);
+		ttp_v_cancel(24, -24, 15, false);
+		mtp_v_cancel(24, -24, 15, false, false);
+		ttp_v_cancel(13, -13, 10, false);
+		mtp_v_cancel(13, -13, 15, false, false);
+		chassis.moveToPoint(-72, 72, 1000, {.forwards = false, .maxSpeed = 20});
+		intake_high(0);
+		intake_middle(40);
+		pros::Task::delay(1000);
+		//chassis.setPose(14, -14, chassis.getPose().theta); 
+		intake_middle(0);
+		//mtp_v_cancel(48, -48, 3);
+		chassis.moveToPoint(48, -48, 3000);
+		intake_high(100);
+		scraper.set_value(true);
+		ttp_v_cancel(67, -48, 10);
 
-	chassis.setPose(48, 18, 0); 
-	scraper.set_value(true);
-	hood.set_value(false);
-	mtp_v_cancel(48, 49, 12);
-	ttp_v_cancel(72, 49, 15);
-	intake_high(127);
-	chassis.moveToPoint(65, 48, 300, {.maxSpeed = 127}, false);
-	chassis.moveToPoint(65, 48, 500, {.maxSpeed = 60}, false);
-	chassis.moveToPoint(65, 48, 900, {.maxSpeed = 20}, false);
+		chassis.moveToPoint(65, -48, 300, {.maxSpeed = 127}, false);
+		chassis.moveToPoint(65, -48, 500, {.maxSpeed = 60}, false);
+		chassis.moveToPoint(65, -48, 400, {.maxSpeed = 20}, false);
 
-	//pros::Task::delay(900);
-	chassis.moveToPoint(30, 48, 800, {.forwards = false, .maxSpeed = 127}, false);
-	chassis.moveToPoint(30, 48, 1700, {.forwards = false, .maxSpeed = 20});
+		chassis.moveToPose(28, -48, 90, 1500, {.forwards = false}, false);
 
-	scraper.set_value(false);
-	hood.set_value(true);
-	pros::Task::delay(1700);
-	chassis.setPose(33, 48, chassis.getPose().theta); 
+		hood.set_value(true);
+		pros::Task::delay(1000);
+		
+		chassis.setPose(33, -48, chassis.getPose().theta); 
+
+		mtp_v_cancel(38, -48, 10);
+		ttp_v_cancel(36, -38, 5);
+		mtp_v_cancel(36, -38, 5);
+		ttp_v_cancel(14, -37, 5, false);
+		mtp_v_cancel(14, -37, 5, false, false, 70);
+	}
+	if(chosen_auto == 3)
+	{
+		chassis.setPose(43.5, 12, 270); 
+		intake_high(100);
+		hood.set_value(false);
+		stp_v_cancel(24, 24, 15, 'r');
+		mtp_v_cancel(24, 24, 25, true);
+
+		ttp_v_cancel(7, 42, 10, 'l');
+		mtp_v_cancel(7, 42, 15);
+		ttp_v_cancel(24, 24, 15, false);
+		mtp_v_cancel(24, 24, 15, false, false);
+		ttp_v_cancel(48, 48, 10);
+		chassis.moveToPoint(48, 48, 3000);
+		intake_high(100);
+		scraper.set_value(true);
+		ttp_v_cancel(67, 48, 10);
+
+		chassis.moveToPoint(65, 48, 300, {.maxSpeed = 127}, false);
+		chassis.moveToPoint(65, 48, 500, {.maxSpeed = 60}, false);
+		chassis.moveToPoint(65, 48, 400, {.maxSpeed = 20}, false);
+
+		chassis.moveToPoint(27, 48, 400, {.forwards = false, .maxSpeed = 127}, false);
+		chassis.moveToPoint(27, 48, 300, {.forwards = false, .maxSpeed = 80}, false);
+
+		chassis.moveToPoint(27, 48, 1700, {.forwards = false, .maxSpeed = 100});
+		hood.set_value(true);
+		pros::Task::delay(1000);
+		
+		chassis.setPose(33, 48, chassis.getPose().theta); 
+
+		mtp_v_cancel(38, 48, 10);
+		ttp_v_cancel(36, 58, 5);
+		mtp_v_cancel(36, 58, 5);
+		ttp_v_cancel(14, 59, 5, false);
+		mtp_v_cancel(14, 59, 5, false, false, 70);
+	}
+	// skills
+	if(chosen_auto == 4)
+	{
+		//part 1
+		chassis.setPose(43.5, 12, 270); 
+		intake_high(100);
+		hood.set_value(false);
+		ears.set_value(true);
+		stp_v_cancel(27, 24, 10, 'r');
+		mtp_v_cancel(27, 24, 15);
+		ttp_v_cancel(48, 48, 15, false);
+		chassis.moveToPoint(47, 48, 2000, {.forwards = false}, false);
+		//mtp_v_cancel(48, 48, 5, false, false);
+		scraper.set_value(true);
+		ttp_v_cancel(72, 47, 10);
+		chassis.moveToPoint(65, 47, 300, {.maxSpeed = 127}, false);
+		chassis.moveToPoint(65, 47, 400, {.maxSpeed = 60}, false);
+		chassis.moveToPoint(65, 47, 1400, {.maxSpeed = 40}, false);
+
+		mtp_v_cancel(53, 47, 40, false, false);
+		stp_v_cancel(36, 57, 25, 'l', false);
+		mtp_v_cancel(36, 57, 15, false, false);
+		stp_v_cancel(-24, 60, 15, 'r', false);
+		mtp_v_cancel(-24, 60, 15, false, false, 127, 800);
+		mtp_v_cancel(-24, 60, 15, false, false, 80);
+
+		stp_v_cancel(-48, 48, 25, 'r', false);
+		mtp_v_cancel(-48, 48, 15, false, false);
+
+		ttp_v_cancel(-72, 48, 15);
+		chassis.moveToPoint(-65, 48, 300, {.maxSpeed = 127}, false);
+		chassis.moveToPoint(-65, 48, 500, {.maxSpeed = 60}, false);
+		chassis.moveToPoint(-65, 48, 1400, {.maxSpeed = 40}, false);
+		chassis.moveToPose(-27, 47, 270, 1500, {.forwards = false}, false);
+
+		chassis.moveToPoint(0, 48, 4000, {.forwards = false, .maxSpeed = 127});
+		scraper.set_value(false);
+		hood.set_value(true);
+		pros::Task::delay(4000);
+		chassis.setPose(-33, 48, chassis.getPose().theta); 
+
+		//part 2
+		
+		mtp_v_cancel(-37, 48, 40);
+		hood.set_value(false);
+		stp_v_cancel(-24, 24, 15, 'l');
+		mtp_v_cancel(-24, 24, 15);
+		ttp_v_cancel(-48, -48, 15);
+		//mtp_v_cancel(-48, -48, 10);
+		chassis.moveToPoint(-48, -47, 2000);
+		scraper.set_value(true);
+
+		chassis.moveToPoint(-48, -47, 1000, {.maxSpeed = 80});
 
 
-	stp_v_cancel(25, 24, 15, 'r');
-	hood.set_value(false);
-	mtp_v_cancel(25, 24, 15, true);
-	stp_v_cancel(-24, 24, 20, 'r');
-	mtp_v_cancel(-24, 24, 15, true);
+		ttp_v_cancel(-72, -47, 10);
+		chassis.moveToPoint(-68, -47, 300, {.maxSpeed = 127}, false);
+		chassis.moveToPoint(-68, -47, 400, {.maxSpeed = 60}, false);
+		chassis.moveToPoint(-68, -47, 1600, {.maxSpeed = 40}, false);
 
+		mtp_v_cancel(-53, -47, 40, false, false);
+		stp_v_cancel(-36, -57, 25, 'l', false);
+		mtp_v_cancel(-36, -57, 15, false, false);
+		stp_v_cancel(-24, -60, 15, 'r', false);
+		mtp_v_cancel(24, -60, 15, false, false, 127, 800);
+		mtp_v_cancel(24, -60, 15, false, false, 80);
+		stp_v_cancel(48, -48, 25, 'r', false);
+		mtp_v_cancel(48, -48, 15, false, false);
+		ttp_v_cancel(72, -48, 15);
 
-	stp_v_cancel(-40, 48, 20, 'r');
-	mtp_v_cancel(-40, 48, 10);
-	ttp_v_cancel(-30, 48, 15, false);
-	chassis.moveToPoint(30, 48, 800, {.forwards = false}, false);
-	chassis.moveToPoint(30, 48, 1500, {.forwards = false, .maxSpeed = 20});
+		chassis.moveToPoint(65, -48, 300, {.maxSpeed = 127}, false);
+		chassis.moveToPoint(65, -48, 400, {.maxSpeed = 60}, false);
+		chassis.moveToPoint(65, -48, 1400, {.maxSpeed = 40}, false);
 
-	hood.set_value(true);
-	pros::Task::delay(1500);
+		chassis.moveToPose(27, -47, 90, 1500, {.forwards = false}, false);
+		chassis.moveToPoint(27, -48, 4000, {.forwards = false, .maxSpeed = 20});
+		scraper.set_value(false);
+		hood.set_value(true);
+		pros::Task::delay(4000);
+		chassis.setPose(33, -48, chassis.getPose().theta); 
 
-	//part 2
+		//part 3
+		stp_v_cancel(25, -24, 15, 'l');
+		hood.set_value(false);
+		mtp_v_cancel(25, -24, 15, true);
+		stp_v_cancel(-24, -24, 20, 'l');
+		mtp_v_cancel(-24, -24, 15, true);
+		scraper.set_value(true);
 
-	chassis.setPose(-33, 48, chassis.getPose().theta); 
-	intake_high(127);
-	scraper.set_value(true);
-	chassis.moveToPoint(-65, 48, 400);
-	chassis.moveToPoint(-65, 48, 800, {.maxSpeed = 60});
-	chassis.moveToPoint(-65, 48, 900, {.maxSpeed = 30});
+		mtp_v_cancel(24, -24, 10, false, false);
+		ttp_v_cancel(13, -14, 10, false);
+		mtp_v_cancel(13, -14, 10, false, false);
+		chassis.moveToPoint(-72, 72, 3000, {.forwards = false, .maxSpeed = 50});
+		intake_high(0);
+		intake_middle(60);
+		pros::Task::delay(3000);
+		scraper.set_value(false);
 
-	hood.set_value(false);
+		stp_v_cancel(60, -24, 15, 'l');
+		mtp_v_cancel(60, -24, 15);
+		ttp_v_cancel(66, 0, 10, false);
+		chassis.moveToPoint(66, 0, 5500, {.forwards = false});
+		intake_middle(0);
+	}
 
-	//pros::Task::delay(1700);
-	chassis.moveToPoint(-60, 48, 300, {.maxSpeed = 60});
-
-	stp_v_cancel(-15.5, 14.5, 15, 'l', false);
-	chassis.moveToPoint(-15.5, 14.5, 3000, {.forwards = false});
-	scraper.set_value(false);
-
-	chassis.moveToPoint(72, -72, 3000, {.forwards = false, .maxSpeed = 40});
-	intake_middle(90);	
-	pros::Task::delay(3000);
-	intake_middle(0);
-
-	intake_high(127);
-	stp_v_cancel(-23, -21, 10, 'l');
-	mtp_v_cancel(-23, -21, 15, true);
-	stp_v_cancel(-48, -49, 15, 'r');
-	scraper.set_value(true);
-
-	mtp_v_cancel(-48, -49, 15);
-	ttp_v_cancel(-65, -49, 10);
-	chassis.moveToPoint(-67, -49, 400);
-	chassis.moveToPoint(-67, -49, 400, {.maxSpeed = 60});
-	chassis.moveToPoint(-67, -49, 500, {.maxSpeed = 30});
-
-	//pros::Task::delay(900);
-	chassis.moveToPoint(-30, -49, 800, {.forwards = false, .maxSpeed = 127}, false);
-	chassis.moveToPoint(-30, -49, 1700, {.forwards = false, .maxSpeed = 20});
-	scraper.set_value(false);
-	hood.set_value(true);
-	pros::Task::delay(1700);
-
-
-	//part 3
-
-	intake_high(127);
-	chassis.setPose(-33, -48, 270); 
-	chassis.moveToPoint(-36, -48, 300, {}, false);
-	stp_v_cancel(24, -56, 10, 'l');
-	mtp_v_cancel(24, -56, 10);
-	scraper.set_value(true);
-
-	stp_v_cancel(48, -46, 10, 'l');
-	mtp_v_cancel(48, -46, 15);
-	ttp_v_cancel(67, -46, 10);
-	chassis.moveToPoint(67, -46, 2000, {.maxSpeed = 60});
-	//pros::Task::delay(900);
-	chassis.moveToPoint(30, -46, 800, {.forwards = false, .maxSpeed = 127}, false);
-	chassis.moveToPoint(30, -46, 1700, {.forwards = false, .maxSpeed = 20});	
-	scraper.set_value(false);
-	hood.set_value(true);
-	pros::Task::delay(1700);
-
-
-	// part 4
-
-	chassis.setPose(33, -48, chassis.getPose().theta); 
-
-	stp_v_cancel(63, -24, 15, 'l');
-	mtp_v_cancel(63, -24, 15);
-	ttp_v_cancel(63, 0, 10, false);
-	chassis.moveToPoint(63, 0, 5500, {.forwards = false});
-	intake_high(0);
-*/
 	//followPath(50000, true, 100, "win_point_pb.txt", 1, 1);
 	//followPath(50000, true, 127, "win_point_pb.txt", 2, -1);
 	//followPath(50000, true, 127, "win_point_pb.txt", 3, 1);
@@ -1093,11 +1113,11 @@ void opcontrol() {
 	
 	//followPath(5000, true, 127, "stanley.txt", 1);
 	intake_high(0);
-	controller.print(0, 0, "program started");
+
 	g_auton_started = true;
 	g_op_control_started = true;
-	brain_data_output();
 
+	float intake_slowdown = 1;
 
 // this task runs the lights during the opc period
 //////////////pros::Task run_lights(run_lights_fn, (void*)"PROS", TASK_PRIORITY_DEFAULT, TASK_STACK_DEPTH_DEFAULT, "run_lights");
@@ -1122,27 +1142,19 @@ void opcontrol() {
 	{
 		if (controller.get_digital(pros::E_CONTROLLER_DIGITAL_R1))
 		{
-			intake_bottom.move(127);
-			intake_top.move(127);
-			intake_index.move(127);
+			intake_high(127*intake_slowdown);
 		}
 		else if (controller.get_digital(pros::E_CONTROLLER_DIGITAL_R2))
 		{
-			intake_bottom.move(-127);
-			intake_top.move(-127);
-			intake_index.move(-127);
+			intake_low(127*intake_slowdown);
 		}
 		else if (controller.get_digital(pros::E_CONTROLLER_DIGITAL_L1))
 		{
-			intake_bottom.move(127);
-			intake_top.move(127);
-			intake_index.move(-127);
+			intake_middle(127*intake_slowdown);
 		}
 		else
 		{
-			intake_bottom.move(0);
-			intake_top.move(0);
-			intake_index.move(0);
+			intake_high(0);
 		}
 
 		if(controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_B))
@@ -1157,6 +1169,20 @@ void opcontrol() {
 
 				ears.set_value(true);
 				g_ears_state = true;
+
+			}
+		}
+
+		if(controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_DOWN))
+		{
+			if(intake_slowdown == 1)
+			{
+				intake_slowdown = 0.5;
+			}
+			else if(intake_slowdown == 0.5)
+			{
+
+				intake_slowdown = 1;
 
 			}
 		}
@@ -1190,6 +1216,19 @@ void opcontrol() {
 			}
 		}
 		
+		if(controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_UP))
+		{
+			if(g_park_state)
+			{
+				park.set_value(false);
+				g_park_state = false;
+			}
+			else
+			{
+				park.set_value(true);
+				g_park_state = true;
+			}
+		}
 		pros::Task::delay(25);
 		}
 	});
