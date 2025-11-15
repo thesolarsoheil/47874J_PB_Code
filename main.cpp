@@ -77,7 +77,8 @@ pros::ADIDigitalOut hood(1);
 // left tracking wheel encoder
 pros::Rotation vertical_encoder(-17);
 
-//pros::Distance distance_front(5);
+pros::Distance distance_left(5);
+pros::Distance distance_right(4);
 
 // left tracking wheel (&what sensor it is tracking, &what type of omniwheel, offset, gear ratio)
 lemlib::TrackingWheel vertical_tracking_wheel(&vertical_encoder, 2.75, +0 /*-1*/, 1);
@@ -176,7 +177,7 @@ float distance_kp = 8, distance_ki = 0, distance_kd = 25;
 float heading_correction_kp = 8, heading_correction_ki = 0, heading_correction_kd = 70;
 int max_slew_accel_fwd = 4, max_slew_decel_rev = 4;
 
-float front_distance_from_center = 4.5;
+float side_distance_from_center = 6.3;
 
 // tool to check if 2 values are "close enough" to each other
 bool check_equal(float val1, float val2, int residual)
@@ -256,7 +257,7 @@ void intake_middle(float volts)
 	intake_bottom.move(volts);
 
 	intake_top.move(volts);
-	intake_index.move(-volts);
+	intake_index.move(-volts*0.5);
 
 }
 void intake_low(float volts)
@@ -268,6 +269,33 @@ void intake_low(float volts)
 
 
 std::vector<lemlib::Pose> poses_holder;
+
+void simple_dist_reset()
+{
+	float dist_to_center = 0;
+	if(chassis.getPose().x > 0 && chassis.getPose().y > 0)
+	{
+		dist_to_center = distance_left.get()*0.0394+side_distance_from_center;
+		chassis.setPose(chassis.getPose().x, 72-dist_to_center, chassis.getPose().theta);
+	}
+	else if(chassis.getPose().x < 0 && chassis.getPose().y > 0)
+	{
+		dist_to_center = distance_right.get()*0.0394+side_distance_from_center;
+		chassis.setPose(chassis.getPose().x, 72-dist_to_center, chassis.getPose().theta);
+	}
+	else if(chassis.getPose().x < 0 && chassis.getPose().y < 0)
+	{
+		dist_to_center = distance_left.get()*0.0394+side_distance_from_center;
+		chassis.setPose(chassis.getPose().x, -72+dist_to_center, chassis.getPose().theta);
+	}
+	else if(chassis.getPose().x > 0 && chassis.getPose().y < 0)
+	{
+		dist_to_center = distance_right.get()*0.0394+side_distance_from_center;
+		chassis.setPose(chassis.getPose().x, -72+dist_to_center, chassis.getPose().theta);
+	}
+
+	
+}
 
 /*
 void distance_set_odom(int range)
@@ -448,18 +476,6 @@ void stp_v_cancel(float x, float y, float final_v, char lockchar, bool forward =
 
 }
 
-void matchload_shake(int time)
-{
-	chassis.cancelMotion();
-	float field_side = fabs(chassis.getPose().x)/chassis.getPose().x;
-
-	for(int i = 0; i < time/400; i++)
-	{
-	chassis.moveToPoint(chassis.getPose().x+1*field_side, chassis.getPose().y, 200, {}, false);
-	chassis.moveToPoint(chassis.getPose().x-1*field_side, chassis.getPose().y, 200, {}, false);
-	}
-
-}
 
 void extractPose(std::string address, int num)
 {
@@ -764,6 +780,11 @@ void brain_data_output()
             pros::screen::print(pros::E_TEXT_SMALL, 1, "Y: %f", chassis.getPose().y); // y
             pros::screen::print(pros::E_TEXT_SMALL, 2, "Theta: %f", chassis.getPose().theta); // heading
             pros::screen::print(pros::E_TEXT_SMALL, 3, "Auto: %d", chosen_auto); // auto
+			float distance_reading = distance_left.get()*0.0394;
+            pros::screen::print(pros::E_TEXT_SMALL, 4, "dist left: %f", distance_reading); // dist sensor
+			distance_reading = distance_right.get()*0.0394;            
+			pros::screen::print(pros::E_TEXT_SMALL, 5, "dist right: %f", distance_reading); // dist sensor
+			
 
             // delay to save resources
             pros::delay(20);
@@ -783,6 +804,7 @@ void initialize() {
 	chassis.calibrate(); // calibrate sensor
 	vertical_encoder.set_position(0); // set the vertical encoder to 0
 	brain_data_output();
+	chosen_auto = 4;
 
 	pros::Task auton_seletor_task([&]() {	
 		pros::screen_touch_status_s_t status;
@@ -790,7 +812,10 @@ void initialize() {
 		while(g_auton_started == false)
 		{
 		 	status = pros::screen::touch_status();
-			chosen_auto = 1+(status.press_count % 4);
+			if(status.press_count > 0);
+			{
+				chosen_auto = 1+(status.press_count % 4);
+			}
 			pros::Task::delay(10);
 		}
 		
@@ -834,7 +859,8 @@ void competition_initialize()
 void autonomous() {
 	g_auton_started = true;
 	pros::Task::delay(20);
-	chosen_auto = 4;
+	
+	chosen_auto = 4; // for testing purposes only
 	
 	if(chosen_auto == 1)
 	{
@@ -845,52 +871,64 @@ void autonomous() {
 		mtp_v_cancel(48, -48, 12);
 
 		ttp_v_cancel(66, -48, 15);
-		intake_high(100);
-		chassis.moveToPoint(66, -48, 1000, {.maxSpeed = 127}, false);
-		pros::Task::delay(300);
-		chassis.moveToPose(28, -48, 90, 1500, {.forwards = false}, false);
-		scraper.set_value(false);
-		chassis.setPose(33, -48, chassis.getPose().theta); 
+		intake_high(127);
+		chassis.moveToPoint(66, -48, 300, {.maxSpeed = 127}, false);
+		chassis.moveToPoint(65, -48, 500, {.maxSpeed = 60}, false);
+		chassis.moveToPoint(65, -48, 400, {.maxSpeed = 20}, false);
+
+		chassis.moveToPose(28, -48, 90, 1200, {.forwards = false});
+		pros::Task::delay(500);
 		hood.set_value(true);
-		pros::Task::delay(1000);
+		chassis.moveToPoint(28, -48, 1000, {.forwards = false});
+		scraper.set_value(false);
+
+		chassis.setPose(33, -48, chassis.getPose().theta);
 
 		mtp_v_cancel(36, -48, 40);
 		stp_v_cancel(22, -23, 15, 'l');
 		hood.set_value(false);
 
 		intake_middle(0);
-		intake_high(100);
+		intake_high(127);
 
 		mtp_v_cancel(22, -23, 10, true);
 		scraper.set_value(true);
-		chassis.turnToPoint(12, -13, 1500, {.forwards = false});
+		chassis.turnToPoint(13, -13, 1500, {.forwards = false});
 
-		mtp_v_cancel(12, -13, 10, false, false);
-		chassis.moveToPoint(0, -4, 700, {.forwards = false, .maxSpeed = 30});
+		mtp_v_cancel(13, -13, 10, false, false);
+		chassis.moveToPoint(0, 0, 700, {.forwards = false, .maxSpeed = 30});
 
 		intake_high(0);
-		intake_middle(50);
+		intake_middle(100);
 		pros::Task::delay(1000);
 		scraper.set_value(false);
-		chassis.setPose(14, -14, chassis.getPose().theta);
+		//chassis.setPose(14, -14, chassis.getPose().theta);
 		stp_v_cancel(22, 24, 15, 'l');
 		
 		intake_middle(0);
-		intake_high(100);
+		intake_high(127);
 		mtp_v_cancel(22, 24, 15, true);
 		scraper.set_value(true);
 
-		stp_v_cancel(48, 47.5, 15, 'r');
+		stp_v_cancel(48, 48, 15, 'r');
 
-		mtp_v_cancel(48, 47.5, 5);
+		mtp_v_cancel(48, 48, 5);
+		
 
 
-		ttp_v_cancel(72, 47.5, 10);
+		//ttp_v_cancel(72, 48, 10);
+		chassis.turnToHeading(90, 1000, {}, false);
+		simple_dist_reset();
 
-		chassis.moveToPoint(72, 47.5, 800, {.maxSpeed = 127}, false);
-		pros::Task::delay(350);
-		chassis.moveToPose(27, 47.5, 90, 1500, {.forwards = false}, false);
+		chassis.moveToPoint(65, 48, 100, {.maxSpeed = 127}, false);
+		chassis.moveToPoint(65, 48, 550, {.maxSpeed = 60}, false);
+		chassis.moveToPoint(65, 48, 400, {.maxSpeed = 20}, false);
+		simple_dist_reset();
 
+		chassis.moveToPose(27, 48, 90, 1100, {.forwards = false});
+		pros::Task::delay(500);
+		hood.set_value(true);
+		chassis.moveToPoint(0, 48, 5000, {.forwards = false});
 		scraper.set_value(false);
 		hood.set_value(true);
 	}
@@ -899,7 +937,7 @@ void autonomous() {
 	if(chosen_auto == 2)
 	{
 		chassis.setPose(43.5, -12, 270); 
-		intake_high(100);
+		intake_high(127);
 		hood.set_value(false);
 		stp_v_cancel(24, -24, 15, 'l');
 		mtp_v_cancel(24, -24, 25, true);
@@ -912,24 +950,26 @@ void autonomous() {
 		mtp_v_cancel(13, -13, 15, false, false);
 		chassis.moveToPoint(-72, 72, 1000, {.forwards = false, .maxSpeed = 20});
 		intake_high(0);
-		intake_middle(40);
+		intake_middle(100);
 		pros::Task::delay(1000);
 		//chassis.setPose(14, -14, chassis.getPose().theta); 
 		intake_middle(0);
 		//mtp_v_cancel(48, -48, 3);
 		chassis.moveToPoint(48, -48, 3000);
-		intake_high(100);
+		intake_high(127);
 		scraper.set_value(true);
-		ttp_v_cancel(67, -48, 10);
-
+		//ttp_v_cancel(67, -48, 10);
+		chassis.turnToHeading(90, 500, {}, false);
+		simple_dist_reset();
 		chassis.moveToPoint(65, -48, 300, {.maxSpeed = 127}, false);
 		chassis.moveToPoint(65, -48, 500, {.maxSpeed = 60}, false);
 		chassis.moveToPoint(65, -48, 400, {.maxSpeed = 20}, false);
 
 		chassis.moveToPose(28, -48, 90, 1500, {.forwards = false}, false);
+		chassis.moveToPoint(0, -48, 1500, {.forwards = false});
 
 		hood.set_value(true);
-		pros::Task::delay(1000);
+		pros::Task::delay(1500);
 		
 		chassis.setPose(33, -48, chassis.getPose().theta); 
 
@@ -939,10 +979,11 @@ void autonomous() {
 		ttp_v_cancel(14, -37, 5, false);
 		mtp_v_cancel(14, -37, 5, false, false, 70);
 	}
+	// right long
 	if(chosen_auto == 3)
 	{
 		chassis.setPose(43.5, 12, 270); 
-		intake_high(100);
+		intake_high(127);
 		hood.set_value(false);
 		stp_v_cancel(24, 24, 15, 'r');
 		mtp_v_cancel(24, 24, 25, true);
@@ -953,7 +994,7 @@ void autonomous() {
 		mtp_v_cancel(24, 24, 15, false, false);
 		ttp_v_cancel(48, 48, 10);
 		chassis.moveToPoint(48, 48, 3000);
-		intake_high(100);
+		intake_high(127);
 		scraper.set_value(true);
 		ttp_v_cancel(67, 48, 10);
 
@@ -981,7 +1022,7 @@ void autonomous() {
 	{
 		//part 1
 		chassis.setPose(43.5, 12, 270); 
-		intake_high(100);
+		intake_high(127);
 		hood.set_value(false);
 		ears.set_value(true);
 		stp_v_cancel(27, 24, 10, 'r');
@@ -1005,7 +1046,10 @@ void autonomous() {
 		stp_v_cancel(-48, 48, 25, 'r', false);
 		mtp_v_cancel(-48, 48, 15, false, false);
 
-		ttp_v_cancel(-72, 48, 15);
+		//ttp_v_cancel(-72, 48, 15);
+		chassis.turnToHeading(270, 1300, {}, false);
+		simple_dist_reset();
+
 		chassis.moveToPoint(-65, 48, 300, {.maxSpeed = 127}, false);
 		chassis.moveToPoint(-65, 48, 500, {.maxSpeed = 60}, false);
 		chassis.moveToPoint(-65, 48, 1400, {.maxSpeed = 40}, false);
@@ -1023,6 +1067,19 @@ void autonomous() {
 		hood.set_value(false);
 		stp_v_cancel(-24, 24, 15, 'l');
 		mtp_v_cancel(-24, 24, 15);
+		/*
+		ttp_v_cancel(-56, 30, 10, false);
+		mtp_v_cancel(-56, 30, 15, false, false);
+		stp_v_cancel(-62, -24, 15, 'r', false);
+		chassis.moveToPoint(-62, -24, 5000, {.forwards = false}, false);
+		chassis.turnToHeading(0, 400, {}, false);
+		simple_dist_reset();
+		stp_v_cancel(-48, -48, 25, 'r', false);
+		mtp_v_cancel(-48, -48, 10, false, false);
+		chassis.turnToHeading(270, 600, {}, false);
+		simple_dist_reset();
+*/
+
 		ttp_v_cancel(-48, -48, 15);
 		//mtp_v_cancel(-48, -48, 10);
 		chassis.moveToPoint(-48, -47, 2000);
@@ -1031,10 +1088,13 @@ void autonomous() {
 		chassis.moveToPoint(-48, -47, 1000, {.maxSpeed = 80});
 
 
-		ttp_v_cancel(-72, -47, 10);
-		chassis.moveToPoint(-68, -47, 300, {.maxSpeed = 127}, false);
-		chassis.moveToPoint(-68, -47, 400, {.maxSpeed = 60}, false);
-		chassis.moveToPoint(-68, -47, 1600, {.maxSpeed = 40}, false);
+		//ttp_v_cancel(-72, -47, 10);
+		chassis.turnToHeading(270, 600, {}, false);
+		simple_dist_reset();
+
+		chassis.moveToPoint(-68, -48, 300, {.maxSpeed = 127}, false);
+		chassis.moveToPoint(-68, -48, 400, {.maxSpeed = 60}, false);
+		chassis.moveToPoint(-68, -48, 1600, {.maxSpeed = 40}, false);
 
 		mtp_v_cancel(-53, -47, 40, false, false);
 		stp_v_cancel(-36, -57, 25, 'l', false);
@@ -1044,8 +1104,11 @@ void autonomous() {
 		mtp_v_cancel(24, -60, 15, false, false, 80);
 		stp_v_cancel(48, -48, 25, 'r', false);
 		mtp_v_cancel(48, -48, 15, false, false);
-		ttp_v_cancel(72, -48, 15);
-
+		
+		//ttp_v_cancel(72, -48, 15);
+		chassis.turnToHeading(90, 1300, {}, false);
+		simple_dist_reset();
+		
 		chassis.moveToPoint(65, -48, 300, {.maxSpeed = 127}, false);
 		chassis.moveToPoint(65, -48, 400, {.maxSpeed = 60}, false);
 		chassis.moveToPoint(65, -48, 1400, {.maxSpeed = 40}, false);
@@ -1070,14 +1133,14 @@ void autonomous() {
 		mtp_v_cancel(13, -14, 10, false, false);
 		chassis.moveToPoint(-72, 72, 3000, {.forwards = false, .maxSpeed = 50});
 		intake_high(0);
-		intake_middle(60);
+		intake_middle(100);
 		pros::Task::delay(3000);
 		scraper.set_value(false);
 
-		stp_v_cancel(60, -24, 15, 'l');
-		mtp_v_cancel(60, -24, 15);
+		stp_v_cancel(60, -36, 15, 'l');
+		mtp_v_cancel(60, -36, 15);
 		ttp_v_cancel(66, 0, 10, false);
-		chassis.moveToPoint(66, 0, 5500, {.forwards = false});
+		chassis.moveToPoint(66, 0, 6500, {.forwards = false});
 		intake_middle(0);
 	}
 
@@ -1151,6 +1214,7 @@ void opcontrol() {
 		else if (controller.get_digital(pros::E_CONTROLLER_DIGITAL_L1))
 		{
 			intake_middle(127*intake_slowdown);
+			
 		}
 		else
 		{
@@ -1177,9 +1241,9 @@ void opcontrol() {
 		{
 			if(intake_slowdown == 1)
 			{
-				intake_slowdown = 0.5;
+				intake_slowdown = 0.3;
 			}
-			else if(intake_slowdown == 0.5)
+			else
 			{
 
 				intake_slowdown = 1;
