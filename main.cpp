@@ -79,6 +79,7 @@ pros::Rotation vertical_encoder(-17);
 
 pros::Distance distance_left(5);
 pros::Distance distance_right(4);
+pros::Distance distance_front(2);
 
 // left tracking wheel (&what sensor it is tracking, &what type of omniwheel, offset, gear ratio)
 lemlib::TrackingWheel vertical_tracking_wheel(&vertical_encoder, 2.75, +0 /*-1*/, 1);
@@ -99,11 +100,10 @@ lemlib::OdomSensors sensors(&vertical_tracking_wheel, // vertical tracking wheel
                             &imu // inertial sensor
 );
 
-
 // lateral PID controller
-lemlib::ControllerSettings lateral_controller(19, // proportional gain (kP)10
-                                              0.15, // integral gain (kI)0.1
-                                              150, // derivative gain (kD)53
+lemlib::ControllerSettings lateral_controller_large(19, // proportional gain (kP)19
+                                              0.15, // integral gain (kI)0.15
+                                              150, // derivative gain (kD)150
                                               2, // anti windup
                                               1, // small error range, in inches
                                               100, // small error range timeout, in milliseconds
@@ -113,9 +113,20 @@ lemlib::ControllerSettings lateral_controller(19, // proportional gain (kP)10
 );
 
 // angular PID controller
-lemlib::ControllerSettings angular_controller(3.2, // proportional gain (kP)
-                                              0.25, // integral gain (kI)
-                                              28,// derivative gain (kD)
+lemlib::ControllerSettings angular_controller_small(2.9, // proportional gain (kP)//3.2
+                                              0.07, // integral gain (kI)//0.25
+                                              20,// derivative gain (kD)//28
+                                              4, // anti windup
+                                              1, // small error range, in degrees
+                                              100, // small error range timeout, in milliseconds
+                                              3, // large error range, in degrees
+                                              500, // large error range timeout, in milliseconds
+                                              0 // maximum acceleration (slew)
+);
+
+lemlib::ControllerSettings angular_controller_large(3.2, // proportional gain (kP)//3.2
+                                              0.15, // integral gain (kI)//0.25
+                                              28,// derivative gain (kD)//28
                                               4, // anti windup
                                               1, // small error range, in degrees
                                               100, // small error range timeout, in milliseconds
@@ -139,29 +150,13 @@ lemlib::ExpoDriveCurve steer_curve	(3, // joystick deadband out of 127
 
 // create the chassis_large
 lemlib::Chassis chassis_large(drivetrain_6m, // drivetrain settings
-                        lateral_controller, // lateral PID settings
-                        angular_controller, // angular PID settings
+                        lateral_controller_large, // lateral PID settings
+                        angular_controller_small, // angular PID settings
                         sensors, // odometry sensors
                         &throttle_curve, // forward/backward driver movement
                         &steer_curve // left/right driver movement
 						);
 
-		// create the chassis_large
-lemlib::Chassis chassis_medium(drivetrain_6m, // drivetrain settings
-                        lateral_controller, // lateral PID settings
-                        angular_controller, // angular PID settings
-                        sensors, // odometry sensors
-                        &throttle_curve, // forward/backward driver movement
-                        &steer_curve // left/right driver movement
-						);		
-
-lemlib::Chassis chassis_small(drivetrain_6m, // drivetrain settings
-                        lateral_controller, // lateral PID settings
-                        angular_controller, // angular PID settings
-                        sensors, // odometry sensors
-                        &throttle_curve, // forward/backward driver movement
-                        &steer_curve // left/right driver movement
-						);
 
 pros::Controller controller(pros::E_CONTROLLER_MASTER); // the controller that will be used for driving
 
@@ -191,7 +186,11 @@ float distance_kp = 8, distance_ki = 0, distance_kd = 25;
 float heading_correction_kp = 8, heading_correction_ki = 0, heading_correction_kd = 70;
 int max_slew_accel_fwd = 4, max_slew_decel_rev = 4;
 
-float side_distance_from_center = 6.3;
+float left_distance_from_center = 6.3;
+float right_distance_from_center = 5;
+
+float front_distance_from_center = 3;
+float dist_to_center = 0;
 
 // tool to check if 2 values are "close enough" to each other
 bool check_equal(float val1, float val2, int residual)
@@ -279,8 +278,8 @@ void intake_middle_skills(float volts)
 {
 	intake_bottom.move(volts);
 
-	intake_top.move(volts*0.4);
-	intake_index.move(-volts*0.2);
+	intake_top.move(volts*0.3);
+	intake_index.move(-volts*0.25);
 
 }
 
@@ -291,35 +290,34 @@ void intake_low(float volts)
 	intake_index.move(-volts);
 }
 
-
 std::vector<lemlib::Pose> poses_holder;
 
 void simple_dist_reset()
 {
-	float dist_to_center = 0;
 	if(chassis_large.getPose().x > 0 && chassis_large.getPose().y > 0)
 	{
-		dist_to_center = distance_left.get()*0.0394+side_distance_from_center;
+		dist_to_center = distance_left.get()*0.0394+left_distance_from_center;
 		chassis_large.setPose(chassis_large.getPose().x, 72-dist_to_center, chassis_large.getPose().theta);
 	}
 	else if(chassis_large.getPose().x < 0 && chassis_large.getPose().y > 0)
 	{
-		dist_to_center = distance_right.get()*0.0394+side_distance_from_center;
+		dist_to_center = distance_right.get()*0.0394+right_distance_from_center;
 		chassis_large.setPose(chassis_large.getPose().x, 72-dist_to_center, chassis_large.getPose().theta);
 	}
 	else if(chassis_large.getPose().x < 0 && chassis_large.getPose().y < 0)
 	{
-		dist_to_center = distance_left.get()*0.0394+side_distance_from_center;
+		dist_to_center = distance_left.get()*0.0394+left_distance_from_center;
 		chassis_large.setPose(chassis_large.getPose().x, -72+dist_to_center, chassis_large.getPose().theta);
 	}
 	else if(chassis_large.getPose().x > 0 && chassis_large.getPose().y < 0)
 	{
-		dist_to_center = distance_right.get()*0.0394+side_distance_from_center;
+		dist_to_center = distance_right.get()*0.0394+right_distance_from_center;
 		chassis_large.setPose(chassis_large.getPose().x, -72+dist_to_center, chassis_large.getPose().theta);
 	}
 
 	
 }
+
 
 /*
 void distance_set_odom(int range)
@@ -386,45 +384,41 @@ void mtp_v_cancel(float x, float y, float final_v, bool ballpile = false, bool f
 				  float timeout = 5000)
 {
 
-	float target_theta_rot = atan2(y, x);
-	float target_y_rot = sin(target_theta_rot) * x + cos(target_theta_rot) * y;
+	float start_x = chassis_large.getPose().x;
+	float slope = (y-chassis_large.getPose().y)/(x-chassis_large.getPose().x);
+	float line_y = -1/slope*(chassis_large.getPose().x - x) + y;
+	
 
-	float current_theta_rot = atan2(chassis_large.getPose().x, chassis_large.getPose().y);
-	float current_y_rot = sin(current_theta_rot) * chassis_large.getPose().x 
-						  + cos(current_theta_rot) * chassis_large.getPose().y;
-
-	int above_below = 0;
-
-	if(target_y_rot > current_y_rot)
+	bool above_below = false;
+	if(y < chassis_large.getPose().y)
 	{
-		above_below = 1;
+		above_below = true;
 	}
 	else
 	{
-		above_below = -1;
+		above_below = false;
 	}
 
-	float dist = hypot(x-chassis_large.getPose().x, y-chassis_large.getPose().y);
+	bool crossed_line = false;
 
-	float max_velocity = 550;
-	float right_velocity = 550;
-	float left_velocity = 550;
 	float final_v_volt = final_v/100 * 127;
 
 	chassis_large.moveToPoint(x, y, timeout, {.forwards = forward, .maxSpeed = max_speed, .minSpeed = final_v_volt});
 
-
-	//chassis_large.waitUntil(dist/2);
 	pros::Task::delay(100);
+	float dist = hypot(x-chassis_large.getPose().x, y-chassis_large.getPose().y);
 
-	while((above_below * (target_y_rot - current_y_rot) > 1) && chassis_large.isInMotion())
+	while((!crossed_line ) && chassis_large.isInMotion())
 	{
 
-		current_theta_rot = atan2(chassis_large.getPose().x, chassis_large.getPose().y);
-	 	current_y_rot = sin(target_theta_rot) * chassis_large.getPose().x 
-						  + cos(target_theta_rot) * chassis_large.getPose().y;
-
-
+		if(above_below && -1/slope*(chassis_large.getPose().x - x) + y >= chassis_large.getPose().y)
+		{
+			crossed_line = true;
+		}
+		else if(!above_below && -1/slope*(chassis_large.getPose().x - x) + y <= chassis_large.getPose().y)
+		{
+			crossed_line = true;
+		}
 
 		if(ballpile)
 		{
@@ -445,6 +439,7 @@ void mtp_v_cancel(float x, float y, float final_v, bool ballpile = false, bool f
 void ttp_v_cancel(float x, float y, float final_v, bool forward = true, 
 				  int max_speed = 127, int min_speed = 0, float timeout = 5000)
 {
+
 	chassis_large.turnToPoint(x, y, timeout, {.forwards = forward, .maxSpeed = max_speed, .minSpeed = min_speed});
 	float dist = fabs(chassis_large.getPose().theta -180/M_PI*atan2(y-chassis_large.getPose().y, x-chassis_large.getPose().x));
 	pros::Task::delay(100);
@@ -470,6 +465,9 @@ void ttp_v_cancel(float x, float y, float final_v, bool forward = true,
 void stp_v_cancel(float x, float y, float final_v, char lockchar, bool forward = true, 
 	float max_speed = 127, float min_speed = 0, float timeout = 5000)
 {
+
+	
+
 	lemlib::DriveSide lockside; 
 	if(lockchar == 'l')
 	{
@@ -533,7 +531,7 @@ void moveto_matchload(int quadrant, int balls)
 		theta = 90;
 		break;
 	}
-	chassis_large.moveToPose(x, y, theta, 5000);
+	chassis_large.moveToPose(x, y, theta, 5000, {.lead = 0.2});
 	
 	while(hypot(chassis_large.getPose().x - x, chassis_large.getPose().y - y) > 16)
 	{
@@ -550,7 +548,7 @@ void moveto_matchload(int quadrant, int balls)
 		x -= 7;
 	}
 
-	chassis_large.moveToPose(x, y, theta, 5000, {.maxSpeed = 60});
+	chassis_large.moveToPose(x, y, theta, 5000, {.lead = 0.2, .maxSpeed = 60});
 	float max_velocity = 550;
 	float right_velocity = 550;
 	float left_velocity = 550;
@@ -566,14 +564,20 @@ void moveto_matchload(int quadrant, int balls)
 
 	if(balls == 3)
 	{
-	pros::Task::delay(100);	
-	chassis_large.moveToPoint(x, y, 300, {.maxSpeed = 30}, false);
+	chassis_large.moveToPoint(0, y, 30, {.forwards = false, .maxSpeed = 30}, false);
+	chassis_large.moveToPoint(x, y, 300, {.maxSpeed = 20}, false);
+	chassis_large.moveToPoint(0, y, 30, {.forwards = false, .maxSpeed = 30}, false);
+	chassis_large.moveToPoint(x, y, 100, {.maxSpeed = 20}, false);
 	}
 	else if(balls == 6)
 	{
-	//pros::Task::delay(50);
-
-	chassis_large.moveToPoint(x, y, 1500, {.maxSpeed = 30}, false);
+	chassis_large.moveToPoint(0, y, 30, {.forwards = false, .maxSpeed = 30}, false);
+	chassis_large.moveToPoint(x, y, 400, {.maxSpeed = 20}, false);
+	for(int i = 0; i < 4; i++)
+	{
+		chassis_large.moveToPoint(0, y, 30, {.forwards = false, .maxSpeed = 20}, false);
+		chassis_large.moveToPoint(x, y, 200, {.maxSpeed = 20}, false);
+	}
 	}
 
 }
@@ -586,15 +590,14 @@ void quarterstack()
 	float intake_speed = intake_bottom.get_actual_velocity();
 	float last_intake_speed = intake_bottom.get_actual_velocity();
 	float timer = 0;
-	while ((fabs(intake_speed - last_intake_speed) < 60) && (timer < 3500))
+	while ((fabs(intake_speed - last_intake_speed) < 60) && (timer < 2500))
 	{
 		last_intake_speed = intake_speed;
 		intake_speed = intake_bottom.get_actual_velocity();
 		pros::Task::delay(10);
 		timer +=10;
 	}
-	pros::Task::delay(100);
-	intake_high(0);
+
 
 }
 
@@ -890,6 +893,28 @@ void followPath(float time_limit_msec, bool exit, float max_output, std::string 
 
 //WIP function to set the robot's position based on the distance sensors
 
+void auto_selector()
+{
+	pros::Task auton_seletor_task([&]() {	
+	pros::screen_touch_status_s_t status = pros::screen::touch_status();
+	float press_count =0;
+	while(true)
+	{
+	 	status = pros::screen::touch_status();
+		press_count = status.press_count;
+
+		if(press_count > 0.5)
+		{
+			chosen_auto = 1+(status.press_count % 5);
+
+		}
+
+		pros::Task::delay(10);
+	}
+		
+	});
+}
+
 void brain_data_output()
 {
 	// print position to brain screen
@@ -905,8 +930,9 @@ void brain_data_output()
             pros::screen::print(pros::E_TEXT_SMALL, 4, "dist left: %f", distance_reading); // dist sensor
 			distance_reading = distance_right.get()*0.0394;            
 			pros::screen::print(pros::E_TEXT_SMALL, 5, "dist right: %f", distance_reading); // dist sensor
+			distance_reading = distance_front.get()*0.0394;            
+			pros::screen::print(pros::E_TEXT_SMALL, 6, "dist front: %f", distance_reading); // dist sensor
 			
-
             // delay to save resources
             pros::delay(20);
         }
@@ -921,26 +947,16 @@ void brain_data_output()
  * to keep execution time for this mode under a few seconds.
  */
 void initialize() {
-	chosen_auto = 2;
 
 	chassis_large.calibrate(); // calibrate sensor
+
 	vertical_encoder.set_position(0); // set the vertical encoder to 0
+
+	chosen_auto = 1;
+
 	brain_data_output();
 	
-	pros::Task auton_seletor_task([&]() {	
-		pros::screen_touch_status_s_t status;
-
-		while(g_auton_started == false)
-		{
-		 	status = pros::screen::touch_status();
-			if(status.press_count > 0);
-			{
-				chosen_auto = 1+(status.press_count % 4);
-			}
-			pros::Task::delay(10);
-		}
-		
-	});
+	auto_selector(); // select the auton mode
 
 }
 
@@ -981,8 +997,8 @@ void autonomous() {
 	g_auton_started = true;
 	pros::Task::delay(20);
 	
-	chosen_auto = 4; // for testing purposes only
 
+	//solo auto
 	if(chosen_auto == 1)
 	{
 
@@ -990,22 +1006,19 @@ void autonomous() {
 		
 		scraper.set_value(true);
 		hood.set_value(false);
-		//stp_v_cancel(24, 24, 15, 'r', false);
-		chassis_large.swingToPoint(24, 24, lemlib::DriveSide::RIGHT, 150, {.forwards = false});
-		stp_v_cancel(48, -45, 15, 'r');
 
-		mtp_v_cancel(48, -45, 10);
-
+		mtp_v_cancel(48, -46, 10);
 
 		ttp_v_cancel(66, -48, 15);
 		intake_high(127);
 
 		moveto_matchload(4, 3);
 
-		chassis_large.moveToPose(28, -47, 90, 1200, {.forwards = false});
-		pros::Task::delay(350);
+		chassis_large.moveToPose(28, -48, 90, 1200, {.forwards = false});
+		//pros::Task::delay(500);
+		chassis_large.waitUntil(16);
 		hood.set_value(true);
-		chassis_large.moveToPoint(28, -47, 650, {.forwards = false});
+		chassis_large.moveToPoint(28, -48, 550, {.forwards = false}, false);
 		scraper.set_value(false);
 
 		chassis_large.setPose(33, -48, chassis_large.getPose().theta);
@@ -1019,21 +1032,25 @@ void autonomous() {
 
 		mtp_v_cancel(22, -23, 10, true);
 		scraper.set_value(true);
-		//chassis_large.turnToPoint(12, -13, 1500, {.forwards = false}, false);
-		ttp_v_cancel(12, -13, 10, false);
-		//intake_high(0);
-		mtp_v_cancel(12, -13, 15, false, false);
+		ttp_v_cancel(12, -13, 5, false);
+
+		chassis_large.moveToPose(12, -13, 135, 300, {.forwards = false, .lead = 0.8});
+		chassis_large.moveToPoint(0, 0, 300, {.forwards = false, .maxSpeed = 50});
+
+
+		pros::Task::delay(300);
+		intake_middle(90);
+
 		chassis_large.moveToPoint(0, 0, 700, {.forwards = false, .maxSpeed = 30});
 		
-		intake_middle(127);
-		pros::Task::delay(1000);
+		pros::Task::delay(700);
 		scraper.set_value(false);
 		//chassis_large.setPose(14, -14, chassis_large.getPose().theta);
-		stp_v_cancel(22, 23, 15, 'l');
+		stp_v_cancel(21, 23, 15, 'l');
 		
 		intake_middle(0);
 		intake_high(127);
-		mtp_v_cancel(22, 23, 15, true);
+		mtp_v_cancel(21, 23, 15, true);
 		scraper.set_value(true);
 
 		stp_v_cancel(48, 48, 15, 'r');
@@ -1043,7 +1060,8 @@ void autonomous() {
 
 
 		//ttp_v_cancel(72, 48, 10);
-		chassis_large.turnToHeading(90, 500, {.minSpeed = 30}, false);
+		chassis_large.turnToHeading(90, 500, {.minSpeed = 20}, false);
+		//angular_pid_chooser(90);
 		simple_dist_reset();
 		/*
 		chassis_large.moveToPoint(65, 48, 100, {.maxSpeed = 127}, false);
@@ -1052,10 +1070,11 @@ void autonomous() {
 		*/
 		moveto_matchload(1, 3);
 
-		chassis_large.moveToPose(27, 48, 90, 1100, {.forwards = false});
-		pros::Task::delay(400);
+		chassis_large.moveToPose(27, 48.5, 90, 1100, {.forwards = false});
+		//pros::Task::delay(500);
+		chassis_large.waitUntil(16);
 		hood.set_value(true);
-		chassis_large.moveToPoint(0, 48, 5000, {.forwards = false});
+		chassis_large.moveToPoint(0, 48.5, 5000, {.forwards = false});
 		scraper.set_value(false);
 		hood.set_value(true);
 	}
@@ -1069,8 +1088,8 @@ void autonomous() {
 		stp_v_cancel(22, -24, 15, 'l');
 		mtp_v_cancel(22, -24, 25, true);
 
-		ttp_v_cancel(7, -42, 10, 'l');
-		mtp_v_cancel(7, -42, 15);
+		ttp_v_cancel(7, -43, 10, 'l');
+		mtp_v_cancel(7, -43, 15);
 		ttp_v_cancel(24, -24, 15, false);
 		mtp_v_cancel(24, -24, 15, false, false);
 		ttp_v_cancel(13, -13, 10, false);
@@ -1079,17 +1098,19 @@ void autonomous() {
 		
 		intake_middle(50);
 		pros::Task::delay(600);
-		intake_middle(127);
+		intake_middle_skills(127);
 		pros::Task::delay(350);
 		intake_middle(0);
-		intake_index.move(-127);
+		intake_index.move(-70);
 		pros::Task::delay(100);
 		intake_index.move(0);
 		chassis_large.moveToPoint(48, -48, 3000);
 		intake_high(127);
 		scraper.set_value(true);
 		//ttp_v_cancel(67, -48, 10);
+		
 		chassis_large.turnToHeading(90, 500, {}, false);
+		//angular_pid_chooser(90, 127, 0, 500);
 		simple_dist_reset();
 
 		moveto_matchload(4, 3);
@@ -1097,181 +1118,285 @@ void autonomous() {
 		//chassis_large.moveToPoint(68, -48, 550, {.maxSpeed = 50}, false);
 		//chassis_large.moveToPoint(68, -48, 400, {.maxSpeed = 20}, false);
 
-		chassis_large.moveToPose(28, -47, 90, 1500, {.forwards = false});
+		chassis_large.moveToPose(28, -48, 90, 1500, {.forwards = false});
 		pros::Task::delay(450);
 		hood.set_value(true);
-		chassis_large.moveToPoint(0, -47, 700, {.forwards = false}, false);
+		chassis_large.moveToPoint(0, -48, 700, {.forwards = false}, false);
 
 		
 		chassis_large.setPose(33, -48, chassis_large.getPose().theta);
 		scraper.set_value(false);
 
 		mtp_v_cancel(38, -48, 10);
-		ttp_v_cancel(36, -37, 5);
-		mtp_v_cancel(36, -37, 5);
-		ttp_v_cancel(19, -37, 5, false);
-		mtp_v_cancel(19, -37, 5, false, false, 40);
+		ttp_v_cancel(36, -37.5, 5);
+		mtp_v_cancel(36, -37.5, 5);
+		ttp_v_cancel(19, -37.5, 5, false);
+		mtp_v_cancel(19, -37.5, 5, false, false, 40);
 	}
-	// right long
+	
+	// left elims
 	if(chosen_auto == 3)
+	{
+		chassis_large.setPose(43.5, -12, 270); 
+		intake_high(127);
+		hood.set_value(false);
+		stp_v_cancel(22, -24, 15, 'l');
+		mtp_v_cancel(22, -24, 25, true);
+
+		ttp_v_cancel(48, -43, 20, false);
+		chassis_large.moveToPoint(48, -43, 1700, {.forwards = false});
+		intake_high(127);
+		scraper.set_value(true);
+		
+		chassis_large.turnToHeading(90, 800, {}, false);
+		simple_dist_reset();
+
+		moveto_matchload(4, 3);
+
+		chassis_large.moveToPose(28, -48, 90, 1500, {.forwards = false});
+		chassis_large.waitUntil(16);
+		hood.set_value(true);
+		chassis_large.moveToPoint(0, -48, 700, {.forwards = false}, false);
+
+		chassis_large.setPose(33, -48, chassis_large.getPose().theta);
+		scraper.set_value(false);
+		ears.set_value(true);
+		mtp_v_cancel(44, -48, 20);
+		hood.set_value(false);
+		ttp_v_cancel(32, -37, 15, false);
+		mtp_v_cancel(32, -37, 20, false, false);
+		ttp_v_cancel(17, -37.5, 15, false);
+		ears.set_value(false);
+		mtp_v_cancel(17, -37.5, 15, false, false);
+	}
+	// right low + long
+	if(chosen_auto == 4)
+	{
+		chassis_large.setPose(43.5, 12, 270);
+		intake_high(127);
+		hood.set_value(false);
+				stp_v_cancel(24, 24, 15, 'r');
+		mtp_v_cancel(24, 24, 25, true);
+
+		ttp_v_cancel(7, 43, 10, 'l');
+		mtp_v_cancel(7, 43, 15);
+		intake_high(0);
+		ttp_v_cancel(24, 24, 15, false);
+		mtp_v_cancel(24, 24, 15, false, false);
+		ttp_v_cancel(15, 15, 10);
+		mtp_v_cancel(15, 15, 15);
+		intake_bottom.move(-127);
+		pros::Task::delay(700);
+		intake_bottom.move(0);
+
+		ttp_v_cancel(48, 48, 10, false, false);
+		chassis_large.moveToPoint(48, 48, 3000, {.forwards = false});
+		intake_high(127);
+		scraper.set_value(true);
+		chassis_large.turnToHeading(90, 800, {}, false);
+		//angular_pid_chooser(90, 127, 0, 800);
+		simple_dist_reset();
+
+		moveto_matchload(1, 3);
+
+		chassis_large.moveToPose(27, 48, 90, 1200, {.forwards = false, .maxSpeed = 127});
+		pros::Task::delay(475);
+		hood.set_value(true);
+		pros::Task::delay(1900);
+		
+		hood.set_value(false);
+	}
+	
+	// right elims
+	if(chosen_auto == 5)
 	{
 		chassis_large.setPose(43.5, 12, 270); 
 		intake_high(127);
 		hood.set_value(false);
-		stp_v_cancel(24, 24, 15, 'r');
-		mtp_v_cancel(24, 24, 25, true);
+		stp_v_cancel(22, 24, 15, 'r');
+		mtp_v_cancel(22, 24, 25, true);
 
-		ttp_v_cancel(7, 42, 10, 'l');
-		mtp_v_cancel(7, 42, 15);
-		ttp_v_cancel(24, 24, 15, false);
-		mtp_v_cancel(24, 24, 15, false, false);
-		ttp_v_cancel(48, 48, 10);
-		chassis_large.moveToPoint(48, 48, 3000);
+		ttp_v_cancel(48, 43, 20, false);
+		chassis_large.moveToPoint(48, 43, 1700, {.forwards = false});
 		intake_high(127);
 		scraper.set_value(true);
-		chassis_large.turnToHeading(90, 500, {}, false);
+		
+		chassis_large.turnToHeading(90, 800, {}, false);
 		simple_dist_reset();
-/*
-		chassis_large.moveToPoint(65, 48, 100, {.maxSpeed = 127}, false);
-		chassis_large.moveToPoint(65, 48, 550, {.maxSpeed = 60}, false);
-		chassis_large.moveToPoint(65, 48, 400, {.maxSpeed = 20}, false);
-*/
+
 		moveto_matchload(1, 3);
 
-		chassis_large.moveToPose(27, 48, 90, 1200, {.forwards = false, .maxSpeed = 127});
-		pros::Task::delay(400);
+		chassis_large.moveToPose(28, 48, 90, 1500, {.forwards = false});
+		chassis_large.waitUntil(16);
 		hood.set_value(true);
-		pros::Task::delay(1800);
-		
-		chassis_large.setPose(33, 48, chassis_large.getPose().theta); 
+		chassis_large.moveToPoint(0, 48, 700, {.forwards = false}, false);
+
+		chassis_large.setPose(33, 48, chassis_large.getPose().theta);
 		scraper.set_value(false);
-		/*
-		mtp_v_cancel(38, 48, 10);
-		ttp_v_cancel(36, 58, 5);
-		mtp_v_cancel(36, 58, 5);
-		ttp_v_cancel(14, 5, 5, false);
-		mtp_v_cancel(14, 57, 5, false, false, 70);
-		*/
+		ears.set_value(true);
+		mtp_v_cancel(44, 48, 20);
+		hood.set_value(false);
+
+		ttp_v_cancel(32, 59, 15, false);
+		mtp_v_cancel(32, 59, 20, false, false);
+		ttp_v_cancel(17, 58.5, 15, false);
+		ears.set_value(false);
+		mtp_v_cancel(17, 58.5, 15, false, false);
 	}
-	// skills
-	if(chosen_auto == 4)
-	{
 	
+
+	// skills
+	if(chosen_auto == 6)
+	{
+		
 		//part 1
 		chassis_large.setPose(43.5, 12, 270); 
 		intake_high(127);
 		hood.set_value(false);
 		ears.set_value(true);
-		stp_v_cancel(27, 24, 10, 'r');
-		mtp_v_cancel(27, 24, 15);
-		ttp_v_cancel(50, 46, 15, false);
-		mtp_v_cancel(50, 46, 10, false, false);
+		stp_v_cancel(26, 24, 10, 'r');
+		mtp_v_cancel(26, 24, 15, true, true);
+		ttp_v_cancel(50, 44, 15, false);
+		mtp_v_cancel(50, 44, 10, false, false);
 		//chassis_large.moveToPoint(47, 48, 2000, {.forwards = false}, false);
 		//mtp_v_cancel(48, 48, 5, false, false);
 		scraper.set_value(true);
 		chassis_large.turnToHeading(90, 1000, {}, false);
+		//angular_pid_chooser(90, 127, 0, 1000);
 		simple_dist_reset();
 		moveto_matchload(1, 6);
 		
-		
+		intake_top.move(0);
 		mtp_v_cancel(53, 47, 40, false, false);
+		intake_bottom.move(0);
 		stp_v_cancel(36, 57, 25, 'l', false);
-		mtp_v_cancel(36, 57, 15, false, false);
-		stp_v_cancel(-24, 60, 15, 'r', false);
-		mtp_v_cancel(-24, 60, 15, false, false, 127, 800);
-		mtp_v_cancel(-24, 60, 15, false, false, 80);
+		mtp_v_cancel(36, 57, 25, false, false);
+		stp_v_cancel(-24, 60, 25, 'r', false);
+		mtp_v_cancel(-24, 60, 25, false, false, 127, 800);
+		mtp_v_cancel(-24, 60, 25, false, false, 80);
 
-		stp_v_cancel(-48, 48, 25, 'r', false);
-		mtp_v_cancel(-48, 48, 15, false, false);
+		chassis_large.turnToHeading(90, 400, {.minSpeed = 30}, false);
+		dist_to_center = distance_left.get()*0.0394+left_distance_from_center;
+		chassis_large.setPose(chassis_large.getPose().x, 72-dist_to_center, chassis_large.getPose().theta);
+
+		//simple_dist_reset();
+
+		stp_v_cancel(-46, 48, 25, 'r', false);
+		mtp_v_cancel(-46, 48, 5, false, false);
 
 		//ttp_v_cancel(-72, 48, 15);
-		chassis_large.turnToHeading(270, 1300, {}, false);
-		simple_dist_reset();
+		chassis_large.turnToHeading(270, 1000, {}, false);
+		//angular_pid_chooser(270, 127, 0, 1300);
 
-
+		intake_high(127);
 		moveto_matchload(2, 6);
-		chassis_large.moveToPose(-27, 47, 270, 1500, {.forwards = false}, false);
-
-		chassis_large.moveToPoint(0, 48, 4000, {.forwards = false, .maxSpeed = 40});
+		chassis_large.moveToPose(-27, 48, 270, 1500, {.forwards = false, .lead = 0.6});
+		pros::Task::delay(1000);
 		hood.set_value(true);
+		intake_top.move(-127);
+		pros::Task::delay(50);
+		intake_top.move(127);
+		chassis_large.moveToPoint(0, 48, 4000, {.forwards = false});
 		pros::Task::delay(4500);
 		scraper.set_value(false);
 		
-		chassis_large.setPose(-33, 48, 270); 
-		intake_high(127);
-		//part 2
+	
 		
+		intake_high(127);
+		//chassis_large.setPose(-33, 48, chassis_large.getPose().theta); 
+		chassis_large.setPose(-33, 48, 270); 
+		
+		//part 2
+		ears.set_value(true);
+
 		mtp_v_cancel(-37, 48, 40);
 		hood.set_value(false);
-		stp_v_cancel(-44, -2, 15, 'l');
-		chassis_large.moveToPoint(-44, -2, 2000);
+		stp_v_cancel(-42, -1, 15, 'l');
+		
+		
+		chassis_large.moveToPoint(-42, -1, 2000);
+		chassis_large.waitUntil(20);
+		chassis_large.moveToPoint(-42, -1, 800, {.maxSpeed = 80});
 		chassis_large.turnToHeading(270, 600, {}, false);
+		//angular_pid_chooser(270, 127, 0, 600);
 
 		intake_high(127);
-		chassis_large.moveToPoint(-72, chassis_large.getPose().y, 1500);
-		pros::Task::delay(500);
-		scraper.set_value(true);
-		pros::Task::delay(400);
-		scraper.set_value(false);
+		chassis_large.moveToPoint(-72, chassis_large.getPose().y, 1200);
 		pros::Task::delay(600);
-
+		scraper.set_value(true);
+		pros::Task::delay(300);
+		pros::Task::delay(300);
 		for(int i = 0; i < 1; i++){
-			chassis_large.turnToHeading(240, 200);
-			chassis_large.turnToHeading(300, 200);
+			chassis_large.turnToHeading(260, 200);
+			chassis_large.turnToHeading(280, 200);
 		}
+		scraper.set_value(false);
+
 		chassis_large.turnToHeading(270, 300, {}, false);
+
+		//angular_pid_chooser(270, 127, 0, 300);
 
 		chassis_large.moveToPoint(-72, chassis_large.getPose().y, 500, {}, false);
+		chassis_large.setPose(0, 0, chassis_large.getPose().theta);
+
+		for(int i = 0; i < 2; i++){
+			chassis_large.turnToPoint(-24, 18, 100);
+			chassis_large.moveToPoint(-24, 18, 200, {}, false);
+			chassis_large.moveToPoint(4, 0, 200, {.forwards = false});
+			chassis_large.turnToPoint(-24, -18, 100);
+			chassis_large.moveToPoint(-24, -18, 200, {}, false);
+			chassis_large.moveToPoint(4, 0, 200, {.forwards = false});
+			//chassis_large.turnToHeading(210, 200);
+			//chassis_large.turnToHeading(320, 200);
+		}
 		
-		for(int i = 0; i < 3; i++){
-			chassis_large.turnToHeading(210, 200);
-			chassis_large.turnToHeading(320, 200);
-		}
 		chassis_large.turnToHeading(270, 300, {}, false);
+		//angular_pid_chooser(270, 127, 0, 300);
 
-		chassis_large.moveToPoint(-43, chassis_large.getPose().y, 2300, {.forwards = false});
+		chassis_large.moveToPoint(32, chassis_large.getPose().y, 800, {.forwards = false}, false);
+		pros::Task::delay(400);
 
-		chassis_large.turnToHeading(270, 400, {}, false);
-		chassis_large.moveToPoint(-72, chassis_large.getPose().y, 2000, {.maxSpeed = 30});
-
-		float right_velocity = 550;
-		float left_velocity = 550;
-		pros::Task::delay(150);
-		while(left_velocity > 10 || right_velocity > 10)
-		{
-			right_velocity = fabs(left_motor_group.get_actual_velocity(0));
-			left_velocity = fabs(right_motor_group.get_actual_velocity(0));
-
-			pros::Task::delay(10);
-		}
-		chassis_large.cancelMotion();
-
+		//chassis_large.moveToPoint(-72, chassis_large.getPose().y, 1400, {.maxSpeed = 20}, false);
+		chassis_large.turnToHeading(270, 800, {.maxSpeed = 20}, false);
 		simple_dist_reset();
-		chassis_large.setPose(-49, chassis_large.getPose().y, chassis_large.getPose().theta);
-		mtp_v_cancel(-45, 0, 10, false, false);
-		ttp_v_cancel(-33, 19, 10);
-		chassis_large.moveToPose(-33, 19, 45, 400);
+		dist_to_center = distance_front.get()*0.0394+front_distance_from_center;
+		chassis_large.setPose(-72+dist_to_center, 
+							chassis_large.getPose().y, 
+							chassis_large.getPose().theta);
+		
+		//pros::Task::delay(9999999);
+		//mtp_v_cancel(-45, 0, 10, false, false);
 
-		chassis_large.moveToPose(-33, 19, 45, 2000, {.maxSpeed = 30});
+		ttp_v_cancel(-21, 21, 5, false);
+		mtp_v_cancel(-21, 21, 5, false, false);
 
-		quarterstack();
-		chassis_large.cancelAllMotions();
-		mtp_v_cancel(-26, 22, 10);
-		intake_bottom.move(-30);
-		ttp_v_cancel(0, 0, 10, false);
+		ttp_v_cancel(-12, 12, 5, false);
 		intake_high(127);
 
-		chassis_large.moveToPoint(0, 0, 300, {.forwards = false});
+		chassis_large.moveToPose(0, 0, 315, 400, {.forwards = false, .lead = 0.7});
+
 		pros::Task::delay(100);
 		intake_top.move(-127);
-		intake_index.move(-127);
-		pros::Task::delay(80);
-		intake_low(0);
-		chassis_large.moveToPoint(0, 0, 700, {.forwards = false, .maxSpeed = 30});
+		//intake_index.move(-127);
+		pros::Task::delay(30);
+		intake_top.move(0);
+		chassis_large.moveToPoint(0, 0, 600, {.forwards = false, .maxSpeed = 35});
+
+		chassis_large.moveToPoint(0, 0, 600, {.forwards = false, .maxSpeed = 30});
+
+
 		intake_middle_skills(127);
 		pros::Task::delay(1500);
-		mtp_v_cancel(chassis_large.getPose().x-1,chassis_large.getPose().y+1 , 15, false, false, 50);
-		pros::Task::delay(1600);
+
+		chassis_large.moveToPoint(chassis_large.getPose().x-1,
+					chassis_large.getPose().y+1, 
+					200);
+		
+		intake_top.move(127);
+		pros::Task::delay(300);
+		intake_middle_skills(127);
+		//intake_index.move(-127*0.175);
+		pros::Task::delay(1800);
 		intake_middle_skills(0);
 		chassis_large.moveToPoint(0, 0, 250, {.forwards = false, .maxSpeed = 30});
 		chassis_large.moveToPoint(-20, 20, 250);
@@ -1279,7 +1404,9 @@ void autonomous() {
 		//part 3
 		stp_v_cancel(-24, -24, 15, 'l');
 		intake_high(127);
+		hood.set_value(true);
 		mtp_v_cancel(-24, -24, 10, true);
+		hood.set_value(false);
 		scraper.set_value(true);
 		stp_v_cancel(-48, -48, 15, 'r');
 		chassis_large.moveToPoint(-48, -48, 1500);
@@ -1288,51 +1415,64 @@ void autonomous() {
 
 		//ttp_v_cancel(-72, -47, 10);
 		chassis_large.turnToHeading(270, 600, {}, false);
+		//angular_pid_chooser(270, 127, 0, 600);
+
 		simple_dist_reset();
 		moveto_matchload(3, 6);
-		/*
-		chassis_large.moveToPoint(-68, -48, 300, {.maxSpeed = 127}, false);
-		chassis_large.moveToPoint(-68, -48, 400, {.maxSpeed = 60}, false);
-		chassis_large.moveToPoint(-68, -48, 1600, {.maxSpeed = 40}, false);
-*/
+		intake_high(0);
+		intake_bottom.move(127);
 		
 		mtp_v_cancel(-53, -48, 40, false, false);
+		intake_bottom.move(0);
 		stp_v_cancel(-36, -57, 25, 'l', false);
-		mtp_v_cancel(-36, -57, 15, false, false);
-		stp_v_cancel(-24, -60, 15, 'r', false);
-		mtp_v_cancel(24, -60, 15, false, false, 127, 800);
-		mtp_v_cancel(24, -60, 15, false, false, 80);
+		mtp_v_cancel(-36, -57, 25, false, false);
+		stp_v_cancel(-24, -60, 25, 'r', false);
+		mtp_v_cancel(24, -60, 25, false, false, 127, 800);
+		mtp_v_cancel(24, -60, 25, false, false, 80);
+
+		chassis_large.turnToHeading(270, 400, {.minSpeed = 30}, false);
+		dist_to_center = distance_left.get()*0.0394+left_distance_from_center;
+		chassis_large.setPose(chassis_large.getPose().x, -72+dist_to_center, chassis_large.getPose().theta);
+
+
 		stp_v_cancel(48, -46, 25, 'r', false);
-		mtp_v_cancel(48, -46, 15, false, false);
+		mtp_v_cancel(48, -46, 5, false, false);
 		
 		//ttp_v_cancel(72, -48, 15);
-		chassis_large.turnToHeading(90, 1300, {}, false);
-		simple_dist_reset();
+		chassis_large.turnToHeading(90, 1100, {}, false);
+		//angular_pid_chooser(90, 127, 0, 1300);
+
+		//simple_dist_reset();
+		intake_high(127);
 		moveto_matchload(4, 6);
-		/*
-		chassis_large.moveToPoint(65, -48, 300, {.maxSpeed = 127}, false);
-		chassis_large.moveToPoint(65, -48, 400, {.maxSpeed = 60}, false);
-		chassis_large.moveToPoint(65, -48, 1600, {.maxSpeed = 40}, false);
-*/
-		chassis_large.moveToPose(27, -47, 90, 1500, {.forwards = false}, false);
-		chassis_large.moveToPoint(27, -47, 4000, {.forwards = false, .maxSpeed = 40});
+		
+		chassis_large.moveToPose(27, -47, 90, 1500, {.forwards = false, .lead = 0.6});
+		pros::Task::delay(1000);
+		hood.set_value(true);
+		intake_high(-127);
+		pros::Task::delay(50);
+		intake_high(127);
+		chassis_large.moveToPoint(27, -47, 4000, {.forwards = false});
+		
 		hood.set_value(true);
 		pros::Task::delay(4500);
 		scraper.set_value(false);
-
-		chassis_large.setPose(33, -48, chassis_large.getPose().theta); 
+		
+		chassis_large.setPose(33, -48, 90); 
+		intake_high(127);
 		
 		//part 4
-		mtp_v_cancel(38, -48, 40);		
+		mtp_v_cancel(48, -48, 40);		
 
-		stp_v_cancel(60, -19, 10, 'l');
-		mtp_v_cancel(60, -19, 15);
-		ttp_v_cancel(63, 0, 15);
+		stp_v_cancel(65, -15, 10, 'l');
+		mtp_v_cancel(65, -15, 15);
+		ttp_v_cancel(67, 0, 15);
 		scraper.set_value(true);
+		hood.set_value(false);
 		pros::Task::delay(200);
-		chassis_large.moveToPoint(63, 0, 1800, {}, false);
+		chassis_large.moveToPoint(67, 0, 1400, {}, false);
 		scraper.set_value(false);
-
+		
 		/*
 		stp_v_cancel(60, -36, 15, 'l');
 		mtp_v_cancel(60, -36, 15);
@@ -1342,17 +1482,7 @@ void autonomous() {
 		*/
 	}
 
-	//followPath(50000, true, 100, "win_point_pb.txt", 1, 1);
-	//followPath(50000, true, 127, "win_point_pb.txt", 2, -1);
-	//followPath(50000, true, 127, "win_point_pb.txt", 3, 1);
-	//followPath(50000, true, 127, "win_point_pb.txt", 4, -1);
 
-
-	// set position to x:0, y:0, heading:0
-    // turn to face heading 90 with a very long timeout
-	//chassis_large.setPose(0,0,0);
-    //chassis_large.turnToHeading(90, 10000);
-	//chassis_large.moveToPoint(0, 36, 9999);
 
 }
 
@@ -1374,9 +1504,11 @@ void opcontrol() {
 	
 	//followPath(5000, true, 127, "stanley.txt", 1);
 	intake_high(0);
-
+	chassis_large.cancelAllMotions();
 	g_auton_started = true;
 	g_op_control_started = true;
+	hood.set_value(false);
+	g_hood_state = false;
 
 // this task runs the lights during the opc period
 //////////////pros::Task run_lights(run_lights_fn, (void*)"PROS", TASK_PRIORITY_DEFAULT, TASK_STACK_DEPTH_DEFAULT, "run_lights");
@@ -1409,7 +1541,7 @@ void opcontrol() {
 		}
 		else if (controller.get_digital(pros::E_CONTROLLER_DIGITAL_L1))
 		{
-			intake_middle_skills(127);
+			intake_middle_skills(127*1.1);
 			
 		}
 		else
@@ -1481,13 +1613,25 @@ void opcontrol() {
 	});
 
 
-
+	int leftY;
+	int rightX;
+	bool cutdrive = false;
     while (true) {
 		// get left y and right x positions
-		int leftY = controller.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_Y);
-		int rightX = controller.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_X);
+		leftY = controller.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_Y);
+		rightX = controller.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_X);
 
-		chassis_large.curvature(leftY, rightX);
+		if(!cutdrive)
+		{
+			chassis_large.curvature(leftY, rightX);
+		}
+
+		if(controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_X))
+		{
+			cutdrive = !cutdrive;
+		}
+
+
 		// delay to save resources
         pros::delay(25);
     }
