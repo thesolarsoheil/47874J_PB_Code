@@ -572,11 +572,10 @@ void moveto_matchload(int quadrant, int balls)
 	else if(balls == 6)
 	{
 	chassis_large.moveToPoint(0, y, 30, {.forwards = false, .maxSpeed = 30}, false);
-	chassis_large.moveToPoint(x, y, 400, {.maxSpeed = 20}, false);
-	for(int i = 0; i < 4; i++)
+	for(int i = 0; i < 6; i++)
 	{
-		chassis_large.moveToPoint(0, y, 30, {.forwards = false, .maxSpeed = 20}, false);
 		chassis_large.moveToPoint(x, y, 200, {.maxSpeed = 20}, false);
+		chassis_large.moveToPoint(0, y, 30, {.forwards = false, .maxSpeed = 20}, false);
 	}
 	}
 
@@ -952,13 +951,14 @@ void initialize() {
 
 	vertical_encoder.set_position(0); // set the vertical encoder to 0
 
-	chosen_auto = 1;
+	chosen_auto = 0;
 
 	brain_data_output();
 	
 	auto_selector(); // select the auton mode
 
 }
+
 
 
 /**
@@ -981,6 +981,7 @@ void competition_initialize()
 {
 	
 }
+ASSET(skills1_txt);
 
 /**
  * Runs the user autonomous code. This function will be started in its own task
@@ -996,7 +997,30 @@ void competition_initialize()
 void autonomous() {
 	g_auton_started = true;
 	pros::Task::delay(20);
-	
+	/*
+	chassis_large.setPose(43.5, 12, 270); 
+	chassis_large.swingToPoint(24, 24, lemlib::DriveSide::RIGHT, 3000, {.minSpeed = 20, .earlyExitRange = 10});
+	chassis_large.moveToPoint(24, 24, 3000, {.minSpeed = 20, .earlyExitRange = 2});
+	chassis_large.turnToPoint(50, 48, 2000, {.minSpeed = 10, .earlyExitRange = 10});
+	chassis_large.moveToPoint(50, 48, 3000, {.minSpeed = 20, .earlyExitRange = 2});
+	scraper.set_value(true);
+
+	chassis_large.turnToPoint(72, 48, 2000, {.minSpeed = 10, .earlyExitRange = 10});
+	moveto_matchload(1, 6);
+	chassis_large.moveToPoint(52, 48, 3000, {.forwards = false, .minSpeed = 40, .earlyExitRange = 3});
+	chassis_large.turnToPoint(24, 60, 3000, {.forwards = false, .minSpeed = 10, .earlyExitRange = 10});
+	chassis_large.moveToPoint(24, 60, 3000, {.forwards = false, .minSpeed = 20, .earlyExitRange = 2});
+	chassis_large.turnToPoint(-24, 60, 3000, {.forwards = false, .minSpeed = 5, .earlyExitRange = 5});
+	simple_dist_reset();
+	scraper.set_value(false);
+	chassis_large.moveToPoint(-24, 60, 3000, {.forwards = false, .minSpeed = 20, .earlyExitRange = 3});
+
+	chassis_large.turnToPoint(-50, 48, 2000, {.forwards = false, .minSpeed = 10, .earlyExitRange = 10});
+	chassis_large.moveToPoint(-50, 48, 3000, {.forwards = false});
+
+	chassis_large.turnToPoint(-27, 48, 2000, {.forwards = false});
+	chassis_large.moveToPoint(-27, 48, 3000, {.forwards = false});
+*/
 
 	//solo auto
 	if(chosen_auto == 1)
@@ -1175,7 +1199,7 @@ void autonomous() {
 		chassis_large.setPose(43.5, 12, 270);
 		intake_high(127);
 		hood.set_value(false);
-				stp_v_cancel(24, 24, 15, 'r');
+		stp_v_cancel(24, 24, 15, 'r');
 		mtp_v_cancel(24, 24, 25, true);
 
 		ttp_v_cancel(7, 43, 10, 'l');
@@ -1390,7 +1414,7 @@ void autonomous() {
 
 		chassis_large.moveToPoint(chassis_large.getPose().x-1,
 					chassis_large.getPose().y+1, 
-					200);
+					200, {.maxSpeed = 30});
 		
 		intake_top.move(127);
 		pros::Task::delay(300);
