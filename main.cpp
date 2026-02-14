@@ -35,13 +35,13 @@ namespace fs = std::filesystem;
 //ex: 1 = A, 2 = B, 3 = C, 4 = D
 
 //intake_motors
-pros::Motor intake_bottom(9, pros::MotorGears::blue); // intake motor on port 19
-pros::Motor intake_top(10, pros::MotorGears::green); // lift motor on port 12
-pros::Motor intake_index(-4, pros::MotorGears::green); // lift motor on port 12
+pros::Motor intake_bottom(11, pros::MotorGears::blue); // intake motor on port 19
+pros::Motor intake_top(12, pros::MotorGears::green); // lift motor on port 12
+pros::Motor intake_index(-18, pros::MotorGears::green); // lift motor on port 12
 
 // condensed motors into motor groups
-pros::MotorGroup left_motor_group({-18, -19, 20}, pros::MotorGears::blue); //the right side of the drivetrain
-pros::MotorGroup right_motor_group({6, -7, 8}, pros::MotorGears::blue); //the left side of the drivetrain
+pros::MotorGroup left_motor_group({-8, 9, -10}, pros::MotorGears::blue); //the right side of the drivetrain
+pros::MotorGroup right_motor_group({1, -2, 3}, pros::MotorGears::blue); //the left side of the drivetrain
 
 lemlib::Drivetrain drivetrain_6m(&left_motor_group, //motors that are on the left channel
                               &right_motor_group, //motors that a	re on the right channel
@@ -54,11 +54,10 @@ lemlib::Drivetrain drivetrain_6m(&left_motor_group, //motors that are on the lef
 // create an imu on port 12
 pros::Imu imu(11);
 
-pros::ADIDigitalOut ears_up(8);
-pros::ADIDigitalOut ears_down(4);	
+pros::ADIDigitalOut ears(1);	
 pros::ADIDigitalOut scraper(2);
-pros::ADIDigitalOut hood(1);
-pros::ADIDigitalOut funnel(5);
+pros::ADIDigitalOut hood(3);
+pros::ADIDigitalOut funnel(4);
 
 
 // left tracking wheel encoder
@@ -115,7 +114,7 @@ lemlib::ExpoDriveCurve throttle_curve(3, // joystick deadband out of 127
 // input curve for steer input during driver control
 lemlib::ExpoDriveCurve steer_curve	(6, // joystick deadband out of 127
                                   6, // minimum output where drivetrain will move out of 127
-                                  1.005 //1.03 expo curve gain
+                                  1.0 //1.03 expo curve gain
 );
 
 // create the chassis
@@ -139,7 +138,7 @@ bool g_op_control_started = false; // determines whether the driver code has bee
 int chosen_auto = 1; // determines which auton path is going to be run
 
 //pneumatics toggles
-float g_ears_up_state = false;
+float g_ears_state = false;
 float g_scraper_state = false;
 float g_hood_state = false;
 float g_funnel_state = false;
@@ -531,7 +530,7 @@ void move_skills_low()
 	chassis.setPose(0, 0, 90);
 		intake_high(127);
 		intake_index.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
-		ears_up.set_value(true);
+		ears.set_value(true);
 		moveto_point(20, 0, 300, {.maxSpeed = 90});
 
 		for(int i = 0; i < 2; i++)
@@ -810,7 +809,7 @@ void autonomous() {
 		scraper.set_value(true);
 		funnel.set_value(false);
 		intake_high(127);
-		ears_up.set_value(true);
+		ears.set_value(true);
 		turnto_heading(90, 1000, {.minSpeed = 5, .earlyExitRange = 5}, false);
 		simple_dist_reset();
 		moveto_matchload(1, 6);
@@ -859,7 +858,7 @@ void autonomous() {
 
 		//chassis.setPose(-31, 48, 270);
 		intake_high(127);
-		ears_up.set_value(true);
+		ears.set_value(true);
 		scraper.set_value(false);
 
 		//move to in front of blue park zone
@@ -993,7 +992,7 @@ void autonomous() {
 		//dist_to_center = distance_right.get()*0.0394+right_distance_from_center;
 		//chassis.setPose(-72+dist_to_center, chassis.getPose().y, chassis.getPose().theta);
 		intake_high(127);
-		ears_up.set_value(true);
+		ears.set_value(true);
 		
 
 		moveto_point(-48, -46, 2000, {.minSpeed = 20, .earlyExitRange = 20});
@@ -1065,7 +1064,7 @@ void autonomous() {
 		
 		//move to 1st matchload
 		
-		moveto_point(52, 43, 3000, {.forwards = false, .minSpeed = 60, .earlyExitRange = 3}, false);
+		moveto_point(53, 43, 3000, {.forwards = false, .minSpeed = 80, .earlyExitRange = 3}, false);
 		scraper.set_value(true);
 		turnto_heading(90, 1000, {.minSpeed = 1, .earlyExitRange = 2}, false);
 		simple_dist_reset();
@@ -1090,8 +1089,9 @@ void autonomous() {
 		//moveto_point(38, 48, 1000, {.minSpeed = 20, .earlyExitRange = 3}, false);
 		swingto_heading(180, lemlib::DriveSide::RIGHT, 2000, {.minSpeed = 50, .earlyExitRange = 10});
 		intake_high(127);
-		hood.set_value(false);
+		
 		turnto_point(23, 23, 2000, {.minSpeed = 10, .earlyExitRange = 5});
+		hood.set_value(false);
 		chassis.moveToPoint(23, 23, 1000, {.minSpeed = 100, .earlyExitRange = 5});
 		moveto_stack(23, 23);
 
@@ -1123,11 +1123,13 @@ void autonomous() {
 		//score on middle goal
 		intake_middle_skills(127);
 		pros::Task::delay(500);
+		
+		
 		turnto_point(38, -38, 200, {.earlyExitRange = 3});
-		moveto_point(38, -38, 2000, {.minSpeed = 15, .earlyExitRange = 2});
-		turnto_point(0, -38, 1500, {.forwards = false, .minSpeed = 1, .earlyExitRange = 1});
+		moveto_point(38, -38, 2000, {.minSpeed = 60, .earlyExitRange = 2});
+		turnto_point(0, -38, 1500, {.forwards = false, .minSpeed = 1, .earlyExitRange = 15});
 		moveto_point(0, -38, 500, {.forwards = false});
-		moveto_point(12, -40, 1000, {.forwards = false});
+		moveto_point(12, -39, 1000, {.forwards = false});
 
 
 		/*
@@ -1327,10 +1329,10 @@ void autonomous() {
 		pros::Task::delay(1300);
 
 		//descore
-		ears_up.set_value(true);
+		ears.set_value(true);
 		moveto_point(33, 35, 2000, {.forwards = false});
 		chassis.turnToHeading(270, 500,{} , false);
-		ears_up.set_value(false);
+		ears.set_value(false);
 		funnel.set_value(false);
 		chassis.moveToPoint(6, chassis.getPose().y, 1500);
 		chassis.turnToHeading(250, 5000, {.maxSpeed = 60});
@@ -1490,18 +1492,18 @@ void opcontrol() {
 		
 		if(controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_B))
 		{
-			if(g_ears_up_state)
+			if(g_ears_state)
 			{
-				ears_up.set_value(false);
-				g_ears_up_state = false;
-				ears_down.set_value(true);
+				ears.set_value(false);
+				g_ears_state = false;
+				
 				
 			}
 			else
 			{
-				ears_up.set_value(true);
-				g_ears_up_state = true;
-				ears_down.set_value(false);
+				ears.set_value(true);
+				g_ears_state = true;
+			
 
 			}
 		}
