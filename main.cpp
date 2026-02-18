@@ -37,7 +37,7 @@ namespace fs = std::filesystem;
 //intake_motors
 pros::Motor intake_bottom(11, pros::MotorGears::blue); // intake motor on port 19
 pros::Motor intake_top(12, pros::MotorGears::green); // lift motor on port 12
-pros::Motor intake_index(-18, pros::MotorGears::green); // lift motor on port 12
+pros::Motor intake_index(-19, pros::MotorGears::green); // lift motor on port 12
 
 // condensed motors into motor groups
 pros::MotorGroup left_motor_group({-8, 9, -10}, pros::MotorGears::blue); //the right side of the drivetrain
@@ -52,12 +52,12 @@ lemlib::Drivetrain drivetrain_6m(&left_motor_group, //motors that are on the lef
 );
 
 // create an imu on port 12
-pros::Imu imu(11);
+pros::Imu imu(12);
 
-pros::ADIDigitalOut ears(1);	
-pros::ADIDigitalOut scraper(2);
-pros::ADIDigitalOut hood(3);
-pros::ADIDigitalOut funnel(4);
+pros::ADIDigitalOut ears(6);
+pros::ADIDigitalOut scraper(8);
+pros::ADIDigitalOut hood(7);
+pros::ADIDigitalOut funnel(2);
 
 
 // left tracking wheel encoder
@@ -89,7 +89,7 @@ lemlib::ControllerSettings lateral_controller_large(19, // proportional gain (kP
                                               100, // small error range timeout, in milliseconds
                                               2, // large error range, in inches
                                               500, // large error range timeout, in milliseconds
-                                              0//250 // maximum acceleration (slew)
+                                              20//250 // maximum acceleration (slew)
 );
 
 // angular PID controller
@@ -108,13 +108,13 @@ lemlib::ControllerSettings angular_controller_small(2.9, // proportional gain (k
 // input curve for throttle input during driver control
 lemlib::ExpoDriveCurve throttle_curve(3, // joystick deadband out of 127
                                      3, // minimum output where drivetrain will move out of 127
-                                     1.019 // expo curve gain
+                                     1.02 // expo curve gain
 );
 
 // input curve for steer input during driver control
 lemlib::ExpoDriveCurve steer_curve	(6, // joystick deadband out of 127
                                   6, // minimum output where drivetrain will move out of 127
-                                  1.0 //1.03 expo curve gain
+                                  1.02 //1.03 expo curve gain
 );
 
 // create the chassis
@@ -1462,7 +1462,7 @@ void opcontrol() {
 			if(!g_auton_started)
 			{
 				intake_middle_skills(120);
-				intake_index.move(-127*0.2);
+				
 			}
 			else
 			{
