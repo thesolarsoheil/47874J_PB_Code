@@ -1100,9 +1100,10 @@ void autonomous() {
 		chassis.moveToPoint(22, -18, 2000, {.minSpeed = 90, .earlyExitRange = 4});
 		moveto_stack(22, -23);
 		scraper.set_value(true);
-		moveto_point(38, -44, 2000, {.minSpeed = 10, .earlyExitRange = 5}, false);
-		turnto_point(24, -45, 2000, {.forwards = false, .minSpeed = 5, .earlyExitRange = 5});
-		moveto_point(24, -45, 300, {.forwards = false, .minSpeed = 100});
+		turnto_point(38, -48, 2000, {.minSpeed = 10, .earlyExitRange = 5}, false);
+		moveto_point(38, -48, 2000, {.minSpeed = 10, .earlyExitRange = 5}, false);
+		turnto_point(24, -48, 2000, {.forwards = false, .minSpeed = 5, .earlyExitRange = 5});
+		moveto_point(24, -48, 300, {.forwards = false, .minSpeed = 100});
 		hood.set_value(true);
 		moveto_point(0, -48, 200, {.forwards = false}, false);
 		pros::Task::delay(1000);
@@ -1122,7 +1123,7 @@ void autonomous() {
 		pros::Task::delay(0);
 		//score on middle goal
 		intake_middle_skills(127);
-		pros::Task::delay(500);
+		pros::Task::delay(4000);
 		turnto_point(38, -38, 200, {.earlyExitRange = 3});
 		moveto_point(38, -38, 2000, {.minSpeed = 15, .earlyExitRange = 2});
 		turnto_point(0, -38, 1500, {.forwards = false, .minSpeed = 1, .earlyExitRange = 1});
