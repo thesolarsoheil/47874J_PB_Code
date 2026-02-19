@@ -35,8 +35,8 @@ namespace fs = std::filesystem;
 //ex: 1 = A, 2 = B, 3 = C, 4 = D
 
 //intake_motors
-pros::Motor intake_bottom(11, pros::MotorGears::blue); // intake motor on port 19
-pros::Motor intake_top(12, pros::MotorGears::green); // lift motor on port 12
+pros::Motor intake_bottom(12, pros::MotorGears::blue); // intake motor on port 19
+pros::Motor intake_top(11, pros::MotorGears::green); // lift motor on port 12
 pros::Motor intake_index(-19, pros::MotorGears::green); // lift motor on port 12
 
 // condensed motors into motor groups
@@ -57,7 +57,7 @@ pros::Imu imu(12);
 pros::ADIDigitalOut ears(6);
 pros::ADIDigitalOut scraper(8);
 pros::ADIDigitalOut hood(7);
-pros::ADIDigitalOut funnel(2);
+pros::ADIDigitalOut funnel(5);
 
 
 // left tracking wheel encoder
