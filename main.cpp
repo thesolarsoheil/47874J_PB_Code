@@ -1026,20 +1026,17 @@ void autonomous() {
 		intake_middle_skills(100);
 		pros::Task::delay(350);
 
-
-
 		//move to matchloader
 		moveto_point(-20, 20, 250, {}, false);
-		intake_middle_skills(0);
+		//intake_middle_skills(0);
 		//swingto_heading(180, lemlib::DriveSide::LEFT, 2000, {.minSpeed = 20, .earlyExitRange = 3}, false);
-		swingto_point(-48, -46, lemlib::DriveSide::LEFT, 2000, {.minSpeed = 20, .earlyExitRange = 5});
+		swingto_point(-48, -46, lemlib::DriveSide::LEFT, 2000, {.minSpeed = 20, .earlyExitRange = 5}, false);
 
 		//dist_to_center = distance_right.get()*0.0394+right_distance_from_center;
 		//chassis.setPose(-72+dist_to_center, chassis.getPose().y, chassis.getPose().theta);
 		intake_high(127);
 		ears.set_value(true);
 		
-
 		moveto_point(-48, -46, 2000, {.minSpeed = 20, .earlyExitRange = 20});
 		moveto_point(-48, -46, 2000, {.maxSpeed = 40, .minSpeed = 5, .earlyExitRange = 2});
 		scraper.set_value(true);
