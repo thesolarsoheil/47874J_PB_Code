@@ -37,7 +37,6 @@ namespace fs = std::filesystem;
 pros::Motor intake_bottom(12, pros::MotorGears::blue); // intake motor on port 19
 pros::Motor intake_top(11, pros::MotorGears::green); // lift motor on port 12
 pros::Motor intake_index(-18, pros::MotorGears::green); // lift motor on port 12
-
 // condensed motors into motor groups
 pros::MotorGroup left_motor_group({-8, 9, -10}, pros::MotorGears::blue); //the right side of the drivetrain
 pros::MotorGroup right_motor_group({-1, 2, 3}, pros::MotorGears::blue); //the left side of the drivetrain
@@ -65,6 +64,8 @@ pros::Rotation vertical_encoder(13);
 pros::Distance distance_left(19);
 pros::Distance distance_right(15);
 pros::Distance distance_front(6);
+
+pros::Optical color_sensor(21);
 
 // left tracking wheel (&what sensor it is tracking, &what type of omniwheel, offset, gear ratio)
 lemlib::TrackingWheel vertical_tracking_wheel(&vertical_encoder, 1.95, +0 /*-1*/, 1);
@@ -147,6 +148,7 @@ float right_distance_from_center = 6.3;
 float front_distance_from_center = 6.3;
 float dist_to_center = 0;
 
+float intake_top_speed = 120;
 
 
 bool check_equal(float val1, float val2, int residual)
@@ -195,18 +197,18 @@ void intake_middle(float volts)
 }
 void intake_middle_skills(float volts)
 {
-	intake_bottom.move(volts);
+	intake_bottom.move(volts*0.41);
 
-	intake_top.move(volts*0.36);
+	intake_top.move(volts*0.41);
 	intake_index.move(-volts*0.20);
 
 }
 void intake_low(float volts)
 {
 	intake_bottom.move(-volts);
-	intake_top.move(-volts*0.7);
+	intake_top.move(-volts);
 	
-	intake_index.move(volts);
+	intake_index.move(127);
 
 }
 
@@ -453,17 +455,21 @@ void moveto_matchload(int quadrant, int balls)
 	chassis.moveToPose(x, y, theta, 5000, {.lead = 0.2, .maxSpeed = 60});
 	pros::Task::delay(300);
 	float tracker_velocity = 550;
-	float final_v_rpm = 5;
+	float final_v_rpm = 1;
 
 	while(tracker_velocity > final_v_rpm)
 	{
 		if(balls == 6)
-			tracker_velocity = fabs(vertical_encoder.get_velocity()*100*360*60);
+			tracker_velocity = fabs(vertical_encoder.get_velocity()/100/360*60*2/2.75);
 		else if(balls == 3)
 			tracker_velocity = fabs(vertical_encoder.get_velocity()/100/360*60*2/2.75);
 		pros::Task::delay(10);
 	}
 	pros::Task::delay(200);
+	if(balls == 3)
+	{
+		pros::Task::delay(00);
+	}
 	chassis.cancelMotion();
 	ears.set_value(true);
 
@@ -480,26 +486,26 @@ void moveto_matchload(int quadrant, int balls)
 	{
 	chassis.moveToPoint(0, y, 10, {.forwards = false, .maxSpeed = 30}, false);
 	
-	chassis.moveToPoint(x, y, 400, {.maxSpeed = 40}, false);
+	chassis.moveToPoint(x, y, 300, {.maxSpeed = 40}, false);
 
 	}
 	else if(balls == 6)
 	{
 	//chassis.moveToPoint(0, y, 30, {.forwards = false, .maxSpeed = 30}, false);
 	chassis.turnToHeading(theta+15, 60, {.minSpeed = 60});
-	for(int i = 0; i < 2; i++)
+	for(int i = 0; i < 5; i++)
 	{
-		chassis.turnToHeading(theta-10, 125, {.minSpeed = 60});
+		chassis.turnToHeading(theta-10, 60, {.minSpeed = 60});
 
-		chassis.moveToPoint(x, y, 40, {.maxSpeed = 31, .minSpeed = 30}, false);
+		chassis.moveToPoint(x, y, 100, {.maxSpeed = 61, .minSpeed = 60}, false);
 		//chassis.moveToPoint(0, y, 30, {.forwards = false, .maxSpeed = 20}, false);
 
-		chassis.turnToHeading(theta+10, 125, {.minSpeed = 60});
-		chassis.moveToPoint(x, y, 40, {.maxSpeed = 31, .minSpeed = 30}, false);
+		chassis.turnToHeading(theta+10, 60, {.minSpeed = 60});
+		chassis.moveToPoint(x, y, 100, {.maxSpeed = 61, .minSpeed = 60}, false);
 		
 	}
 	chassis.turnToHeading(theta, 30, {.minSpeed = 30}, false);
-	chassis.moveToPoint(x, y, 600, {.minSpeed = 50}, false);
+	chassis.moveToPoint(x, y, 200, {.minSpeed = 50}, false);
 	dist_to_center = distance_front.get()*0.0394+front_distance_from_center;
 	chassis.setPose(fabs(x)/x*(72-dist_to_center), chassis.getPose().y, chassis.getPose().theta);
 	
@@ -561,8 +567,8 @@ void move_skills_low()
 
 	moveto_point(-72, chassis.getPose().y, 200, {.forwards = false, .maxSpeed = 40}, false);
 	chassis.setBrakeMode(pros::E_MOTOR_BRAKE_HOLD);
-	moveto_point(-72, chassis.getPose().y, 700, {.forwards = false}, false);
-	pros::Task::delay(100);
+	moveto_point(-72, chassis.getPose().y, 600, {.forwards = false}, false);
+	pros::Task::delay(200);
 
 	// reset position after park
 	turnto_heading(90, 400, {.minSpeed = 15, .earlyExitRange = 2}, false);
@@ -620,13 +626,13 @@ void move_skills_low()
 	pros::Task::delay(1500);
 
 	intake_low(127*0.5);
-	moveto_point(72, 72, 200, {.forwards = false, .maxSpeed = 40});
+	moveto_point(72, 72, 250, {.forwards = false, .maxSpeed = 40});
 	intake_low(127*0.5);
 
 	moveto_point(0, 6, 1000, {.maxSpeed = 30});
 		
 		
-	moveto_point(48, 44, 200, {.forwards = false, .minSpeed = 20, .earlyExitRange = 7});
+	intake_high(127);
 		
 }
 
@@ -637,10 +643,10 @@ void descore()
 	chassis.moveToPoint(37, 48, 1000, {.minSpeed = 50, .earlyExitRange = 2});
 	chassis.turnToHeading(135, 2000, {.minSpeed = 20, .earlyExitRange = 5}, false);
 	chassis.moveToPose(19, 53, 80, 2000, {.forwards = false, .lead = 0.5, .minSpeed = 100});
-	chassis.moveToPoint(13, 54, 600, {.forwards = false,.maxSpeed = 100, .minSpeed = 100}, false);
+	chassis.moveToPoint(16, 54, 1200, {.forwards = false,.maxSpeed = 101, .minSpeed = 100}, false);
 	chassis.setBrakeMode(pros::motor_brake_mode_e::E_MOTOR_BRAKE_HOLD);
 	pros::Task::delay(50);
-	chassis.turnToHeading(160, 2000, {.maxSpeed = 21, .minSpeed = 20});
+	chassis.turnToHeading(160, 2000, {.maxSpeed = 51, .minSpeed = 50});
 	pros::Task::delay(300);
 	scraper.set_value(true);
 }
@@ -747,6 +753,7 @@ void brain_data_output()
 			pros::screen::print(pros::E_TEXT_SMALL, 5, "dist right: %f", distance_reading); // dist sensor
 			distance_reading = distance_front.get()*0.0394;            
 			pros::screen::print(pros::E_TEXT_SMALL, 6, "dist front: %f", distance_reading); // dist sensor
+			pros::screen::print(pros::E_TEXT_SMALL, 7, "hue: %f"); // dist sensor
 			
             // delay to save resources
             pros::delay(20);
@@ -764,9 +771,9 @@ void brain_data_output()
 void initialize() { 
 
 	chassis.calibrate(); // calibrate sensor
-
+	color_sensor.set_led_pwm(100);
 	vertical_encoder.set_position(0); // set the vertical encoder to 0
-	intake_top.set_brake_mode(pros::motor_brake_mode_e::E_MOTOR_BRAKE_HOLD);
+	//intake_top.set_brake_mode(pros::motor_brake_mode_e::E_MOTOR_BRAKE_HOLD);
 
 	chosen_auto = 0;
 	
@@ -809,6 +816,7 @@ void competition_initialize()
  * from where it left off.
  */
 void autonomous() {
+
 	g_auton_started = true;
 	pros::Task::delay(20);
 
@@ -820,7 +828,13 @@ void autonomous() {
 		
 		move_skills_low();
 
-		moveto_point(48, 44, 2000, {.forwards = false, .minSpeed = 20, .earlyExitRange = 7});
+		moveto_point(20, 20, 500, {.forwards = false, .minSpeed = 10, .earlyExitRange = 2}, false);
+
+		turnto_point(22, -22, 800, {.minSpeed = 1, .earlyExitRange = 3}, false);
+
+		chassis.moveToPoint(22, -22, 800, {.maxSpeed = 40});
+		moveto_stack(22, -22);
+
 		scraper.set_value(true);
 		funnel.set_value(false);
 		intake_high(127);
@@ -867,15 +881,12 @@ void autonomous() {
 
 		//chassis.moveToPoint(0, 48, 1900, {.forwards = false, .maxSpeed = 15});
 
-		pros::Task::delay(2800);
-		moveto_point(-48, 48, 100, {.maxSpeed = 40});
-		hood.set_value(false);
-		pros::Task::delay(50);		
-		moveto_point(0, 48, 200, {.forwards = false, .maxSpeed = 30}, false);
+		pros::Task::delay(3100);
 		chassis.setPose(-31, 48, chassis.getPose().theta);
 		
+		
 
-		//chassis.setPose(-31, 48, 270);
+		chassis.setPose(-31, 48, 270);
 		intake_high(127);
 		ears.set_value(true);
 		scraper.set_value(false);
@@ -885,17 +896,20 @@ void autonomous() {
 		moveto_point(-39, 48, 800, {.minSpeed = 1, .earlyExitRange = 2}, false);
 		hood.set_value(true);
 		swingto_heading(180, lemlib::DriveSide::LEFT, 2000, {.minSpeed = 5, .earlyExitRange = 5}, false);
-		
+			hood.set_value(false);
+
 		//moveto_point(-43, 4, 2000);
+		/*
 		chassis.moveToPose(-43, 4, 180, 1200, {.lead = 0.7, .minSpeed = 110}, false);
 		moveto_point(-43, 4, 2000, {.minSpeed = 1, .earlyExitRange = 1}, false);
-		hood.set_value(false);
 
 		dist_to_center = distance_front.get()*0.0394+front_distance_from_center;
 		
 		chassis.setPose(chassis.getPose().x, -72+dist_to_center, chassis.getPose().theta);
 		chassis.setBrakeMode(pros::E_MOTOR_BRAKE_HOLD);
-		moveto_point(-43, 0, 2500, {});
+		*/
+		moveto_point(-43, 1, 2500, {});
+		
 		/*
 		chassis.moveToPose(-43, 4, 180, 3000, {.lead = 0.7, .minSpeed = 60});
 		//chassis.waitUntil(25);
@@ -965,7 +979,7 @@ void autonomous() {
 			chassis.setPose(chassis.getPose().x, chassis.getPose().y, 270);
 		}
 		moveto_point(20, chassis.getPose().y, 200, {.forwards = false, .maxSpeed = 30}, false);
-		moveto_point(20, chassis.getPose().y, 2000, {.forwards = false}, false);
+		moveto_point(20, chassis.getPose().y, 1500, {.forwards = false}, false);
 		pros::Task::delay(200);
 
 
@@ -985,11 +999,11 @@ void autonomous() {
 		moveto_point(-21, 21, 1000, {.forwards = false});
 		turnto_point(-10, 10, 700, {.forwards = false});
 		*/
-		moveto_point(-30, chassis.getPose().y, 2000, {.forwards = false,.minSpeed = 10, 
+		moveto_point(-29, chassis.getPose().y, 2000, {.forwards = false,.minSpeed = 10, 
 														.earlyExitRange = 1}, false);
 		turnto_point(-29, 17, 2500, {.minSpeed = 1, .earlyExitRange = 3});
 		//chassis.moveToPose(30, 24, 0, 800);
-		moveto_point(-29, 17, 1400, {.minSpeed = 1, .earlyExitRange = 1}, false);
+		moveto_point(-29, 17, 1400, {.minSpeed = 10, .earlyExitRange = 3}, false);
 		intake_high(0);
 		intake_bottom.move(-40);
 		//moveto_point(-29, 30, 600, {.maxSpeed = 90}, false);
@@ -1013,7 +1027,7 @@ void autonomous() {
 
 		//score on middle goal
 
-		chassis.moveToPoint(-10, 10, 500, {.forwards = false, .maxSpeed = 50});
+		chassis.moveToPoint(-10, 10, 800, {.forwards = false, .maxSpeed = 50});
 
 		intake_middle_skills(170);
 		pros::Task::delay(500);
@@ -1022,24 +1036,22 @@ void autonomous() {
 		intake_middle_skills(100);
 		pros::Task::delay(400);
 		intake_top.move(127);
+		intake_bottom.move(127);
 		pros::Task::delay(50);
 		intake_middle_skills(100);
 		pros::Task::delay(350);
 
-
-
 		//move to matchloader
 		moveto_point(-20, 20, 250, {}, false);
-		intake_middle_skills(0);
+		//intake_middle_skills(0);
 		//swingto_heading(180, lemlib::DriveSide::LEFT, 2000, {.minSpeed = 20, .earlyExitRange = 3}, false);
-		swingto_point(-48, -46, lemlib::DriveSide::LEFT, 2000, {.minSpeed = 20, .earlyExitRange = 5});
+		swingto_point(-48, -46, lemlib::DriveSide::LEFT, 2000, {.minSpeed = 20, .earlyExitRange = 5}, false);
 
 		//dist_to_center = distance_right.get()*0.0394+right_distance_from_center;
 		//chassis.setPose(-72+dist_to_center, chassis.getPose().y, chassis.getPose().theta);
 		intake_high(127);
 		ears.set_value(true);
 		
-
 		moveto_point(-48, -46, 2000, {.minSpeed = 20, .earlyExitRange = 20});
 		moveto_point(-48, -46, 2000, {.maxSpeed = 40, .minSpeed = 5, .earlyExitRange = 2});
 		scraper.set_value(true);
@@ -1083,10 +1095,12 @@ void autonomous() {
 		chassis.cancelMotion();
 		//chassis.moveToPoint(0, 48, 1900, {.forwards = false, .maxSpeed = 15});
 
-		pros::Task::delay(2800);
+		pros::Task::delay(3100);
+		/*
 		moveto_point(48, -48, 100, {.maxSpeed = 40});
 		hood.set_value(false);
 		moveto_point(0, -48, 200, {.forwards = false, .maxSpeed = 40}, false);
+		*/
 		chassis.setPose(31, -48, chassis.getPose().theta);
 		
 		//park
@@ -1136,6 +1150,7 @@ void autonomous() {
 		
 		//move to stacks 1 and 2
 		//moveto_point(38, 48, 1000, {.minSpeed = 20, .earlyExitRange = 3}, false);
+		moveto_point(33, 48, 100);
 		swingto_heading(180, lemlib::DriveSide::RIGHT, 2000, {.minSpeed = 50, .earlyExitRange = 10});
 		intake_high(127);
 		
@@ -1149,11 +1164,11 @@ void autonomous() {
 		chassis.moveToPoint(22, -18, 2000, {.minSpeed = 90, .earlyExitRange = 4});
 		moveto_stack(22, -23);
 		scraper.set_value(true);
-		moveto_point(38, -46, 2000, {.minSpeed = 10, .earlyExitRange = 5}, false);
-		turnto_point(24, -46, 2000, {.forwards = false, .minSpeed = 5, .earlyExitRange = 5});
-		moveto_point(24, -46, 300, {.forwards = false, .minSpeed = 100});
+		moveto_point(38, -44, 2000, {.minSpeed = 10, .earlyExitRange = 5}, false);
+		turnto_point(24, -44, 2000, {.forwards = false, .minSpeed = 5, .earlyExitRange = 5});
+		moveto_point(24, -44, 300, {.forwards = false, .minSpeed = 100});
 		hood.set_value(true);
-		moveto_point(0, -48, 200, {.forwards = false}, false);
+		moveto_point(0, -45, 200, {.forwards = false}, false);
 		pros::Task::delay(1000);
 		chassis.setPose(31, -48, chassis.getPose().theta);
 
@@ -1226,10 +1241,10 @@ void autonomous() {
 		moveto_stack(23, -23);
 
 		//move to goal and score
-		chassis.turnToPoint(36, -46, 2000, {.minSpeed = 10, .earlyExitRange = 10});
-		chassis.moveToPoint(36, -46, 3000, {.minSpeed = 20, .earlyExitRange = 8});
-		chassis.turnToPoint(27, -46, 2000, {.forwards = false, .minSpeed = 10, .earlyExitRange = 20});
-		chassis.moveToPoint(27, -46, 700, {.forwards = false});
+		chassis.turnToPoint(36, -45, 2000, {.minSpeed = 10, .earlyExitRange = 10});
+		chassis.moveToPoint(36, -45, 3000, {.minSpeed = 20, .earlyExitRange = 8});
+		chassis.turnToPoint(27, -45, 2000, {.forwards = false, .minSpeed = 10, .earlyExitRange = 25});
+		chassis.moveToPoint(27, -45, 700, {.forwards = false});
 		pros::Task::delay(200);
 		hood.set_value(true);
 		pros::Task::delay(800);
@@ -1242,7 +1257,7 @@ void autonomous() {
 		hood.set_value(false);
 
 		chassis.moveToPose(19, -43, 80, 2000, {.forwards = false, .lead = 0.5, .minSpeed = 100}, false);
-		pros::Task::delay(1000);
+		pros::Task::delay(500);
 		chassis.moveToPoint(16, -43, 1000, {.forwards = false,.maxSpeed = 31, .minSpeed = 30}, false);
 		turnto_heading(70, 100);
 		turnto_heading(130, 400, {.minSpeed = 127});
@@ -1396,7 +1411,7 @@ void autonomous() {
 		intake_high(127);
 		ears.set_value(true);
 		chassis.setBrakeMode(pros::motor_brake_mode_e::E_MOTOR_BRAKE_HOLD);
-		chassis.moveToPose(10, -42, 180, 2500, {.lead = 0.25, .minSpeed = 120});
+		chassis.moveToPose(11.25, -42, 180, 2500, {.lead = 0.25, .minSpeed = 120});
 		pros::Task::delay(500);
 		scraper.set_value(true);
 		pros::Task::delay(150);
@@ -1410,16 +1425,17 @@ void autonomous() {
 		//swingto_point(24, -40, lemlib::DriveSide::LEFT, 300, {.forwards = false, .minSpeed = 15, .earlyExitRange = 10});
 		//turnto_point(24, -40, 800, {.forwards = false, .minSpeed = 15, .earlyExitRange = 10}, false);
 		//moveto_point(24, -40, 500, {.forwards = false}, false);
-		chassis.moveToPose(39, -54, 0, 1500, {.forwards = false, .lead = 0.8, .minSpeed = 110});
+
+		chassis.moveToPose(42, -54, 0, 1500, {.forwards = false, .lead = 0.8, .minSpeed = 110});
 		while(chassis.getPose().theta > 30 && chassis.getPose().theta < 330){
 			pros::Task::delay(10);
 		}
 
-		moveto_point(39, -52, 500, {.forwards = false, .minSpeed = 40, .earlyExitRange = 2}, false);
+		moveto_point(42, -52, 500, {.forwards = false, .minSpeed = 40, .earlyExitRange = 2}, false);
 		//turnto_heading(90, 900, {.minSpeed = 1, .earlyExitRange = 5}, false);
 		chassis.turnToPoint(24, -50, 2000, {.forwards = false, .minSpeed = 1, .earlyExitRange = 5}, false);
 		chassis.moveToPoint(0, -50, 500, {.forwards = false});
-		pros::Task::delay(100);
+		pros::Task::delay(200);
 		hood.set_value(true);
 		pros::Task::delay(1200);
 		scraper.set_value(false);
@@ -1490,23 +1506,23 @@ void autonomous() {
 		hood.set_value(false);
 		turnto_point(0, 0, 1000, {.minSpeed = 10, .earlyExitRange = 5});
 		//chassis.turnToPoint(8.5, 11.5, 2000, {.maxSpeed = 90, .minSpeed = 1, .earlyExitRange = 2});
-		chassis.moveToPoint(0, 0, 600, {});
+		chassis.moveToPoint(0, 0, 900, {});
 		chassis.moveToPoint(0, 0, 2100, {.maxSpeed = 40});
 
 		//score on low goal
-		pros::Task::delay(800);
+		pros::Task::delay(400);
 		funnel.set_value(true);
 		intake_low(127);
 		intake_index.move(-60);
-		pros::Task::delay(1300);
+		pros::Task::delay(1800);
 
 		//descore
 		ears.set_value(true);
 		moveto_point(33, 35, 2000, {.forwards = false});
-		chassis.turnToHeading(270, 500,{} , false);
+		chassis.turnToHeading(280, 500,{} , false);
 		ears.set_value(false);
 		funnel.set_value(false);
-		chassis.moveToPoint(6, chassis.getPose().y, 1500);
+		chassis.moveToPoint(6, chassis.getPose().y+1, 1500);
 		chassis.turnToHeading(250, 5000, {.maxSpeed = 60});
 		chassis.setBrakeMode(pros::motor_brake_mode_e::E_MOTOR_BRAKE_HOLD);
 
@@ -1556,7 +1572,7 @@ void autonomous() {
 		intake_high(127);
 		ears.set_value(true);
 		chassis.setBrakeMode(pros::motor_brake_mode_e::E_MOTOR_BRAKE_HOLD);
-		chassis.moveToPose(10, 42, 0, 2500, {.lead = 0.25, .minSpeed = 120});
+		chassis.moveToPose(11.25, 42, 0, 2500, {.lead = 0.25, .minSpeed = 120});
 		pros::Task::delay(500);
 		scraper.set_value(true);
 		pros::Task::delay(150);
@@ -1615,6 +1631,133 @@ void autonomous() {
 	}
 	break;
 	default:
+	
+		chassis.setPose(-31, -48, 270);
+		intake_high(127);
+		ears.set_value(true);
+		scraper.set_value(false);
+		//pros::Task::delay(9999999);
+		//move to in front of blue park zone
+
+		moveto_point(-35, -48, 800, {.minSpeed = 20, .earlyExitRange = 2}, false);
+		hood.set_value(true);
+		turnto_point(-26, -26, 800, {.minSpeed = 1, .earlyExitRange = 2}, false);
+		hood.set_value(false);
+		chassis.moveToPose(-30, -24, 0, 800, {.lead = 0.7, .minSpeed = 60}, false);
+		intake_high(0);
+		scraper.set_value(true);
+		turnto_point(-43, -3, 800, {.minSpeed = 5, .earlyExitRange = 3}, false);
+		chassis.moveToPoint(-43, -3, 2500, {.minSpeed = 15, .earlyExitRange = 2});
+		pros::Task::delay(500);
+		scraper.set_value(false);
+		chassis.waitUntilDone();
+
+		//pros::Task::delay(9999999);
+		
+		//enter park zone and clear balls
+		turnto_heading(270, 600, {.minSpeed = 1, .earlyExitRange = 3}, false);
+		chassis.setBrakeMode(pros::E_MOTOR_BRAKE_COAST);
+		intake_high(127);
+		moveto_point(-72, chassis.getPose().y, 100, {.maxSpeed = 70});
+
+		moveto_point(-72, chassis.getPose().y, 100, {.maxSpeed = 30});
+		chassis.moveToPoint(-72, chassis.getPose().y, 1200, {.maxSpeed = 70});
+
+		pros::Task::delay(400);
+		scraper.set_value(true);
+		pros::Task::delay(400);
+		scraper.set_value(false);
+
+		chassis.moveToPoint(72, chassis.getPose().y, 300, {.forwards = false, .maxSpeed = 30}, false);
+		turnto_heading(270, 300, {}, false);
+
+		moveto_point(-72, chassis.getPose().y, 600, {}, false);
+		chassis.moveToPoint(72, chassis.getPose().y, 100, {.forwards = false, .maxSpeed = 90}, false);
+		chassis.setPose(0, 0, chassis.getPose().theta);
+		moveto_point(-72, chassis.getPose().y, 300, { .maxSpeed = 90}, false);
+		chassis.moveToPoint(72, chassis.getPose().y, 100, {.forwards = false, .maxSpeed = 90}, false);
+
+		for(int i = 0; i < 1; i++){
+			turnto_heading(255, 200);
+			turnto_heading(285, 200);
+		}
+
+		
+		//leave park zone
+		turnto_heading(270, 200, {}, false);
+		moveto_point(-72, chassis.getPose().y, 300, {.minSpeed = 127});
+		if(check_equal(chassis.getPose().theta, 270, 3))
+		{
+			chassis.setPose(chassis.getPose().x, chassis.getPose().y, 270);
+		}
+
+		moveto_point(20, chassis.getPose().y, 200, {.forwards = false, .maxSpeed = 30}, false);
+		moveto_point(20, chassis.getPose().y, 1000, {.forwards = false}, false);
+		pros::Task::delay(200);
+
+
+		// reset position after park
+		turnto_heading(270, 500, {.minSpeed = 15, .earlyExitRange = 2}, false);
+		chassis.setPose(0, 1, chassis.getPose().theta);
+
+		weighted_dist_reset();
+		dist_to_center = distance_front.get()*0.0394+front_distance_from_center;
+		chassis.setPose(-72+dist_to_center, 
+							chassis.getPose().y, 
+							chassis.getPose().theta);
+
+		//move to middle goal
+		
+		turnto_point(-24, 24, 1000, {.minSpeed = 1, .earlyExitRange = 4});
+		intake_high(127);
+		chassis.moveToPoint(-24, 24, 1000, {.minSpeed = 20, .earlyExitRange = 3});
+		moveto_stack(-24, 24);
+		turnto_point(-10, 10, 1000, {.forwards = false, .minSpeed = 1, .earlyExitRange = 3});
+		chassis.moveToPoint(-10, 10, 400, {.forwards = false, .maxSpeed = 100});
+		chassis.moveToPoint(-10, 10, 800, {.forwards = false, .maxSpeed = 30});
+
+		pros::Task::delay(150);
+		intake_high(-127); 
+		pros::Task::delay(100);
+		//moveto_point(-10, 10, 300, {.forwards = false, .maxSpeed = 20});
+		intake_middle_skills(127);
+		intake_bottom.move(0);
+		intake_top.move(0);
+		pros::Task::delay(50);
+		intake_middle_skills(160);
+		chassis.turnToHeading(315, 200, {.minSpeed = 100, .earlyExitRange = 1});
+
+		//score on middle goal
+
+		chassis.moveToPoint(-10, 10, 800, {.forwards = false, .maxSpeed = 50});
+
+		intake_middle_skills(140);
+		pros::Task::delay(700);
+		
+		intake_middle_skills(110);
+		
+		int timer = 0;
+		int hue = 0;
+		ears.set_value(true);
+		while((hue < 50 || hue > 320) && timer < 801)
+		{
+			hue = color_sensor.get_hue();
+			
+			timer+=3;
+			pros::Task::delay(3);
+
+		}
+		ears.set_value(false);
+
+		//pros::Task::delay(800);
+
+		
+		intake_middle_skills(0);
+		//intake_high(20);
+		intake_index.move(-100*0.1);
+		pros::Task::delay(450);
+		intake_high(0);
+		chassis.moveToPoint(-20, 20, 1000);
 		break;
 	}
 
@@ -1647,8 +1790,7 @@ void opcontrol() {
 	scraper.set_value(false);
 	g_scraper_state = false;
 	chassis.setBrakeMode(pros::motor_brake_mode_e::E_MOTOR_BRAKE_COAST);
-	intake_index.set_brake_mode(pros::motor_brake_mode_e::E_MOTOR_BRAKE_HOLD);
-
+	//intake_index.set_brake_mode(pros::motor_brake_mode_e::E_MOTOR_BRAKE_HOLD);
 
 	bool skills_preload = true;
 
@@ -1694,11 +1836,11 @@ void opcontrol() {
 				intake_middle(100);
 			}
 
-
 		}
 		else
 		{
 			intake_high(0);
+			intake_index.move(50);
 			//intake_index.move(8);
 		}
 
@@ -1743,6 +1885,8 @@ void opcontrol() {
 			g_ears_state = true;
 		}
 		
+
+
 		/*
 		if(controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_A))
 		{
